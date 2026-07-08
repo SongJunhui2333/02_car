@@ -7,23 +7,7 @@ uint8_t get_key_state(uint32_t key) {
     else return 0;
 }
 
-void GROUP1_IRQHandler()
-{
-    switch (DL_GPIO_getPendingInterrupt(KEY_PORT))
-    {
-    case KEY_KEY9_IIDX:
-        /* code */
-        status = (status + 1) % 3;
-        break;
-    case KEY_KEY10_IIDX:
-        status = (status + 3 -1) % 3;
-        /* code */
-        break;
-    
-    default:
-        break;
-    }
-}
+
 
 
 

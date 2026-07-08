@@ -30,7 +30,9 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "bsp_tick.h"
 #include "delay.h"
+#include "irq.h"
 #include "key.h"
 #include "motor.h"
 #include "oled.h"
@@ -38,7 +40,15 @@
 #include "uart.h"
 #include <stdio.h>
 
-int status = 0;
+extern uint8_t debug_rx_flag;
+extern __IO uint8_t uart_rx_buff[UART_RX_MAX_LENGTH];
+extern uint8_t uart_rx_length;
+
+extern int filt_velocity_r;
+extern int filt_velocity_l;
+
+extern uint16_t motor_l_target_speed;
+extern uint16_t motor_r_target_speed;
 
 int main(void)
 {
@@ -55,13 +65,37 @@ int main(void)
 
     motor_init(1);
     motor_init(2);
-    motor_set_duty(1, 2000);
+
+    NVIC_EnableIRQ(DC_MOTOR_GPIOA_INT_IRQN); // 使能编码器中断
+
+    // motor_set_duty(1, 3000);
+
+    // 电机pid初始化
+    pid_init(&pid_motor_l, PID_INCREMENTAL, MOTOR_KP, MOTOR_KI, MOTOR_KD, 4000, 0);
+    pid_init(&pid_motor_r, PID_INCREMENTAL, MOTOR_KP, MOTOR_KI, MOTOR_KD, 4000, 0);
+
+    pid_set_setpoint(&pid_motor_l, 20);
+    pid_set_setpoint(&pid_motor_r, 20);
 
     while (1)
     {
-        delay_ms(1000);
+        // delay_ms(1000);
         motor_set_direction(1, 1);
-        delay_ms(1000);
-        motor_set_direction(1, 2);
+        // delay_ms(1000);
+        // motor_set_direction(1, 2);
+
+
+
+        // if (debug_rx_flag == 1)
+        // {
+        //     debug_rx_flag = 0;
+        //     UART_print_string(DEBUG_INST, "Debug RX: ");
+        //     UART_print_string(DEBUG_INST, (char *)uart_rx_buff);
+        //     UART_print_string(DEBUG_INST, "\r\n");
+        //     uart_rx_length = 0;
+        // }
+
+        // UART_print_string(DEBUG_INST, "hello ti\n");
+        delay_ms(50);
     }
 }

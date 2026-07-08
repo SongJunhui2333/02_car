@@ -26,6 +26,9 @@ void motor_init(uint8_t motor_id)
         DL_GPIO_clearPins(DC_MOTOR_BIN2_PORT, DC_MOTOR_BIN2_PIN);
         DL_Timer_setCaptureCompareValue(PWM_MOTOR_INST, 0, GPIO_PWM_MOTOR_C1_IDX);
     }
+
+    DL_Timer_startCounter(MOTOR_PID_INST);   // 启动PID定时器计数器
+    NVIC_EnableIRQ(MOTOR_PID_INST_INT_IRQN); // 使能PID定时器中断
 }
 
 void motor_set_duty(uint8_t motor_id, uint16_t duty)
