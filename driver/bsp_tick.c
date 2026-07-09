@@ -2,6 +2,8 @@
 
 static volatile uint64_t mTick = 0; // 当前滴答计数值
 
+extern volatile unsigned long tick_ms;
+
 __IO uint32_t speed_tick = 0; // 速度计数值
 
 int filt_velocity_r = 0; // 滤波后的速度
@@ -21,6 +23,7 @@ extern uint16_t encoder_r_count; // 编码器右轮计数
 static void systick_inc_tick(void)
 {
     mTick++;
+    tick_ms++;
 }
 
 /**
