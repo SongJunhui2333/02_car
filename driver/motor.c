@@ -28,7 +28,7 @@ void motor_init(uint8_t motor_id)
     }
 
     DL_Timer_startCounter(MOTOR_PID_INST);   // 启动PID定时器计数器
-    NVIC_EnableIRQ(MOTOR_PID_INST_INT_IRQN); // 使能PID定时器中断
+    // NVIC_EnableIRQ(MOTOR_PID_INST_INT_IRQN); // 使能PID定时器中断
 }
 
 void motor_set_duty(uint8_t motor_id, uint16_t duty)
@@ -37,6 +37,10 @@ void motor_set_duty(uint8_t motor_id, uint16_t duty)
     if (duty > 4000)
     {
         duty = 4000; // 限制占空比最大值为4000
+    }
+    if (duty < 0)
+    {
+        duty = 0; // 限制占空比最小值为0
     }
 
     if (motor_id == 1)

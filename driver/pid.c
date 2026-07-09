@@ -1,7 +1,7 @@
 #include "pid.h"
 
-uint16_t motor_l_target_speed = 20;
-uint16_t motor_r_target_speed = 20;
+uint16_t motor_l_target_speed = 10;
+uint16_t motor_r_target_speed = 10;
 
 /**
  * @brief 初始化PID控制器

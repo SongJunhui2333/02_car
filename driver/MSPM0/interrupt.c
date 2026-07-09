@@ -1,11 +1,14 @@
 #include "interrupt.h"
+#include "../Trace/Trace.h"
 #include "../WIT/wit.h"
 #include "../bsp_tick.h"
 #include "../motor.h"
 #include "../uart.h"
 #include "stdio.h"
 
-int status = 0;
+/* 外部声明：电机目标速度（在pid.c中定义） */
+extern uint16_t motor_l_target_speed;
+extern uint16_t motor_r_target_speed;
 
 uint16_t encoder_l_count = 0;
 uint16_t encoder_r_count = 0;
@@ -14,16 +17,17 @@ uint16_t encoder_r_count = 0;
 pid_t pid_motor_l;
 pid_t pid_motor_r;
 
+/* 创建航向PID控制器实例（用于惯性导航） */
+pid_t pid_heading;
+
+/* ========== 惯性导航状态变量 ========== */
+static float heading_target = 0.0f;  /* 目标航向角，丢失黑线时锁定 */
+static uint8_t gyro_mode_active = 0; /* 是否处于陀螺仪导航模式 */
+
 void GROUP1_IRQHandler(void)
 {
     switch (DL_GPIO_getPendingInterrupt(GPIOB))
     {
-    case KEY_KEY9_IIDX:
-        status = (status + 1) % 3;
-        break;
-    case KEY_KEY10_IIDX:
-        status = (status + 3 - 1) % 3;
-        break;
     case DC_MOTOR_ENCODER2_A_IIDX: // 编码器2A引脚中断
         encoder_r_count++;
         break;
@@ -137,4 +141,96 @@ void UART_WIT_INST_IRQHandler(void)
     DL_DMA_setDestAddr(DMA, DMA_WIT_CHAN_ID, (uint32_t)&wit_dmaBuffer[0]);
     DL_DMA_setTransferSize(DMA, DMA_WIT_CHAN_ID, 32);
     DL_DMA_enableChannel(DMA, DMA_WIT_CHAN_ID);
+}
+
+/**
+ * @brief 控制PID中断服务函数（50ms触发一次）
+ *
+ * 两种模式自动切换：
+ *   - 检测到黑线 → 循迹PID（位置式，trace_distance反馈）
+ *   - 丢失黑线 → 陀螺仪航向保持PID（wit_data.yaw反馈）
+ */
+void CONTROL_PID_INST_IRQHandler(void)
+{
+    switch (DL_Timer_getPendingInterrupt(CONTROL_PID_INST))
+    {
+    case DL_TIMER_IIDX_LOAD: {
+        float steering;
+        float base_speed;
+
+        /* 刷新循迹传感器，判断是否有黑线 */
+        trace_reflash();
+        uint8_t line_detected = trace_black_line_detect();
+
+        if (line_detected)
+        {
+            /* ====== 模式1：循迹模式 ====== */
+            gyro_mode_active = 0; // 退出陀螺仪模式
+            base_speed = (float)TRACE_BASE_SPEED;
+
+            /* 死区处理：黑线在中心附近直行，避免抖动 */
+            if (trace_distance >= TRACE_CENTER_POS - TRACE_DEAD_ZONE &&
+                trace_distance <= TRACE_CENTER_POS + TRACE_DEAD_ZONE)
+            {
+                pid_set_setpoint(&pid_motor_l, base_speed);
+                pid_set_setpoint(&pid_motor_r, base_speed);
+                break;
+            }
+
+            /* 位置式PID：setpoint=4.5, feedback=trace_distance */
+            steering = pid_calculate(&trace_pid, trace_distance);
+        }
+        else
+        {
+            /* ====== 模式2：陀螺仪惯性导航 ====== */
+            base_speed = (float)GYRO_BASE_SPEED;
+
+            if (!gyro_mode_active)
+            {
+                /* 首次丢失黑线 → 锁定当前航向为目标 */
+                gyro_mode_active = 1;
+                heading_target = wit_data.yaw;
+                pid_reset(&pid_heading); // 清空陀螺仪PID历史
+            }
+
+            /* 计算最短航向误差，处理 ±180° 跳变
+             *  例: target=170°, current=-170° → error=340° → 归一化= -20°
+             *  表示实际只偏了20°，往正方向转更短 */
+            float heading_error = heading_target - wit_data.yaw;
+            if (heading_error > 180.0f)
+                heading_error -= 360.0f;
+            if (heading_error < -180.0f)
+                heading_error += 360.0f;
+
+            /* 航向PID：setpoint=0, feedback=heading_error
+             *  → error = 0 - heading_error = -heading_error
+             *  → 当heading_error>0（偏右），输出<0（左转），自动纠偏 */
+            pid_set_setpoint(&pid_heading, 0);
+            steering = pid_calculate(&pid_heading, heading_error);
+        }
+
+        /* ====== 差速控制：左右轮差速转向 ====== */
+        float left_speed = base_speed + steering;
+        float right_speed = base_speed - steering;
+
+        /* 限幅保护 */
+        if (left_speed < 0.0f)
+            left_speed = 0.0f;
+        if (right_speed < 0.0f)
+            right_speed = 0.0f;
+        if (left_speed > 20.0f)
+            left_speed = 20.0f;
+        if (right_speed > 20.0f)
+            right_speed = 20.0f;
+
+        /* 更新电机PID目标速度 */
+        pid_set_setpoint(&pid_motor_l, left_speed);
+        pid_set_setpoint(&pid_motor_r, right_speed);
+
+        break;
+    }
+
+    default:
+        break;
+    }
 }
