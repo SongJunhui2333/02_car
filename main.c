@@ -67,8 +67,8 @@ int main(void)
     motor_init(2);
     NVIC_EnableIRQ(DC_MOTOR_GPIOA_INT_IRQN); // 使能编码器中断
                                              // 电机pid初始化
-    pid_init(&pid_motor_l, PID_INCREMENTAL, MOTOR_KP, MOTOR_KI, MOTOR_KD, 2000, 0);
-    pid_init(&pid_motor_r, PID_INCREMENTAL, MOTOR_KP, MOTOR_KI, MOTOR_KD, 2000, 0);
+    pid_init(&pid_motor_l, PID_INCREMENTAL, MOTOR_KP, MOTOR_KI, MOTOR_KD, 4000, 0);
+    pid_init(&pid_motor_r, PID_INCREMENTAL, MOTOR_KP, MOTOR_KI, MOTOR_KD, 4000, 0);
     // 设置电机初始目标速度
     pid_set_setpoint(&pid_motor_l, motor_l_target_speed);
     pid_set_setpoint(&pid_motor_r, motor_r_target_speed);
@@ -93,15 +93,13 @@ int main(void)
 
     uint16_t distVal = 0;
 
-    // motor_set_duty(1, 2000);
-    // motor_set_duty(2, 2000);
+    motor_set_duty(1, 2000);
+    motor_set_duty(2, 2000);
 
     while (1)
     {
         // delay_ms(1000);
-        motor_set_direction(1, 2);
-        motor_set_direction(2, 2);
-        // delay_ms(300);
+        // motor_set_direction(1, 1);
         // delay_ms(1000);
         // motor_set_direction(1, 2);
 
@@ -132,10 +130,7 @@ int main(void)
         // delay_ms(1000);
 
         distVal = Read_Ultrasonic();
-        // sprintf((char *)oled_buffer, "%4u", distVal);
-        sprintf((char *)oled_buffer, ":%d,%d\n", filt_velocity_l, filt_velocity_r);
-
-        OLED_ShowString(0, 0, oled_buffer, 16);
-        delay_ms(50);
+        sprintf((char *)oled_buffer, "%4u", distVal);
+        OLED_ShowString(6 * 8, 0, oled_buffer, 16);
     }
 }
