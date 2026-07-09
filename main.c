@@ -93,13 +93,14 @@ int main(void)
 
     uint16_t distVal = 0;
 
-    motor_set_duty(1, 2000);
-    motor_set_duty(2, 2000);
+    // motor_set_duty(1, 2000);
+    // motor_set_duty(2, 2000);
 
     while (1)
     {
         // delay_ms(1000);
-        // motor_set_direction(1, 1);
+        motor_set_direction(1, 2);
+        motor_set_direction(2, 2);
         // delay_ms(1000);
         // motor_set_direction(1, 2);
 
@@ -130,7 +131,8 @@ int main(void)
         // delay_ms(1000);
 
         distVal = Read_Ultrasonic();
-        sprintf((char *)oled_buffer, "%4u", distVal);
-        OLED_ShowString(6 * 8, 0, oled_buffer, 16);
+        // sprintf((char *)oled_buffer, "%4u", distVal);
+        sprintf((char *)oled_buffer, "%d\n,%d", filt_velocity_l, filt_velocity_r);
+        OLED_ShowString(0, 0, oled_buffer, 16);
     }
 }
