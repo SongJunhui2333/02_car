@@ -37,21 +37,12 @@ void UART_send_data(UART_Regs *uart, const uint8_t *buff, uint16_t length)
 uint8_t uart_send_buff[100];
 uint8_t uart_send_data[100];
 
-
 __IO uint8_t uart_rx_buff[UART_RX_MAX_LENGTH];
 uint8_t uart_rx_length = 0;
 
 uint8_t debug_rx_flag = 0;
 
-uint8_t rx = 0;
-int16_t a = 0;
-float b = 0;
-uint32_t test = 0;
-__IO uint32_t capture_value = 0;
-
-__IO uint16_t timea_counter = 0;
-
-__IO uint16_t rx_size = 0;
+uint8_t print_rx_flag = 0;
 
 void DEBUG_INST_IRQHandler()
 {
@@ -68,6 +59,7 @@ void DEBUG_INST_IRQHandler()
             }
         }
     }
+    break;
     case DL_UART_MAIN_IIDX_RX_TIMEOUT_ERROR: {
         while (DL_UART_receiveDataCheck(DEBUG_INST, (uint8_t *)(uart_rx_buff + uart_rx_length)))
         {
@@ -78,7 +70,43 @@ void DEBUG_INST_IRQHandler()
             }
         }
         debug_rx_flag = 1;
+        uart_rx_buff[uart_rx_length] = '\0'; // Null-terminate the received string
     }
     break;
+    default:
+        break;
+    }
+}
+
+void PRINT_INST_IRQHandler()
+{
+    volatile uint32_t res = DL_UART_Main_getPendingInterrupt(PRINT_INST);
+    switch (res)
+    {
+    case DL_UART_MAIN_IIDX_RX: {
+        while (DL_UART_receiveDataCheck(PRINT_INST, (uint8_t *)(uart_rx_buff + uart_rx_length)))
+        {
+            uart_rx_length++;
+            if (uart_rx_length >= UART_RX_MAX_LENGTH)
+            {
+                break;
+            }
+        }
+    }
+    case DL_UART_MAIN_IIDX_RX_TIMEOUT_ERROR: {
+        while (DL_UART_receiveDataCheck(PRINT_INST, (uint8_t *)(uart_rx_buff + uart_rx_length)))
+        {
+            uart_rx_length++;
+            if (uart_rx_length >= UART_RX_MAX_LENGTH)
+            {
+                break;
+            }
+        }
+        print_rx_flag = 1;
+        uart_rx_buff[uart_rx_length] = '\0'; // Null-terminate the received string
+    }
+    break;
+    default:
+        break;
     }
 }

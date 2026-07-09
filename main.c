@@ -30,6 +30,8 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "Ultrasonic_Capture/ultrasonic_capture.h"
+#include "WIT/wit.h"
 #include "bsp_tick.h"
 #include "delay.h"
 #include "irq.h"
@@ -43,12 +45,16 @@
 extern uint8_t debug_rx_flag;
 extern __IO uint8_t uart_rx_buff[UART_RX_MAX_LENGTH];
 extern uint8_t uart_rx_length;
+extern uint8_t uart_send_buff[100];
+extern uint8_t print_rx_flag;
 
 extern int filt_velocity_r;
 extern int filt_velocity_l;
 
 extern uint16_t motor_l_target_speed;
 extern uint16_t motor_r_target_speed;
+
+uint8_t oled_buffer[200];
 
 int main(void)
 {
@@ -68,6 +74,9 @@ int main(void)
 
     NVIC_EnableIRQ(DC_MOTOR_GPIOA_INT_IRQN); // 使能编码器中断
 
+    NVIC_EnableIRQ(DEBUG_INST_INT_IRQN);
+    NVIC_EnableIRQ(PRINT_INST_INT_IRQN);
+
     // motor_set_duty(1, 3000);
 
     // 电机pid初始化
@@ -77,25 +86,76 @@ int main(void)
     pid_set_setpoint(&pid_motor_l, 20);
     pid_set_setpoint(&pid_motor_r, 20);
 
+    Ultrasonic_Init();
+
+    WIT_Init();
+
+    uint16_t disVal = 0;
+
+    // delay_ms(1000);
+
     while (1)
     {
         // delay_ms(1000);
-        motor_set_direction(1, 1);
+        // motor_set_direction(1, 1);
         // delay_ms(1000);
         // motor_set_direction(1, 2);
-
-
 
         // if (debug_rx_flag == 1)
         // {
         //     debug_rx_flag = 0;
-        //     UART_print_string(DEBUG_INST, "Debug RX: ");
+
         //     UART_print_string(DEBUG_INST, (char *)uart_rx_buff);
         //     UART_print_string(DEBUG_INST, "\r\n");
+
+        //     uart_rx_length = 0;
+        // }
+
+        // /* 持续处理串口接收的数据 */
+
+        // if (print_rx_flag)
+        // {
+        //     print_rx_flag = 0;
+
+        //     UART_print_string(PRINT_INST, (char *)uart_send_buff);
+
+        //     UART_print_string(PRINT_INST, "\r\n");
+
         //     uart_rx_length = 0;
         // }
 
         // UART_print_string(DEBUG_INST, "hello ti\n");
-        delay_ms(50);
+        // delay_ms(50);
+
+        // disVal = Read_Ultrasonic();
+        // char disStr[20];
+        // sprintf(disStr, "disVal: %4u", disVal);
+        // OLED_ShowString(0, 0, (uint8_t *)disStr, 16);
+        // OLED_Refresh();
+
+        // OLED_ShowString(0, 0, (uint8_t *)"L:", 16);
+        // char lStr[20];
+        // sprintf(lStr, "%d", i);
+        // i++;
+        // OLED_ShowString(16, 0, (uint8_t *)lStr, 16);
+        // OLED_Refresh();
+        // delay_ms(100);
+
+        sprintf((char *)oled_buffer, "pith:%-6.1f \n roll:%-6.1f \n yaw:%-6.1f\n\n", wit_data.pitch, wit_data.roll,
+                wit_data.yaw);
+        // OLED_ShowString(0, 0, oled_buffer, 16);
+        // OLED_Refresh();
+
+        UART_print_string(DEBUG_INST, oled_buffer);
+
+        // sprintf((char *)oled_buffer, "%-6.1f", wit_data.roll);
+        // // OLED_ShowString(0, 16, oled_buffer, 16);
+        // // OLED_Refresh();
+        // UART_print_string(DEBUG_INST, oled_buffer);
+        // sprintf((char *)oled_buffer, "%-6.1f", wit_data.yaw);
+        // // OLED_ShowString(0, 32, oled_buffer, 16);
+        // // OLED_Refresh();
+        // UART_print_string(DEBUG_INST, oled_buffer);
+        delay_ms(1000);
     }
 }
