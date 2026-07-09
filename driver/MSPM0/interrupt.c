@@ -60,9 +60,9 @@ void MOTOR_PID_INST_IRQHandler(void)
     {
     case DL_TIMER_IIDX_LOAD: {
 
-        // uint8_t send_speed[20];
-        // sprintf((char *)send_speed, "%d\n", filt_velocity_l * 10);
-        // UART_print_string(DEBUG_INST, (char *)send_speed);
+        uint8_t send_speed[20];
+        sprintf((char *)send_speed, "%d,%d\n", filt_velocity_l, filt_velocity_r);
+        UART_print_string(DEBUG_INST, (char *)send_speed);
 
         /* 使用编码器计数值作为速度反馈进行PID计算 */
         float ctrl_l = pid_calculate(&pid_motor_l, (float)filt_velocity_l);
