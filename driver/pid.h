@@ -3,7 +3,7 @@
 
 #include "ti_msp_dl_config.h"
 
-#define MOTOR_KP (0.85f)
+#define MOTOR_KP (0.5f)
 #define MOTOR_KI (0.0f)
 #define MOTOR_KD (0.0f)
 
