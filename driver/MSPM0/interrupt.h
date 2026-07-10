@@ -5,9 +5,9 @@
 #include "ti_msp_dl_config.h"
 
 /* ========== 航向PID参数（惯性导航-可调） ========== */
-#define HEADING_KP (2.0f)        /* 比例系数 — 越大纠偏越猛 */
-#define HEADING_KI (0.00f)       /* 积分系数 — 消除稳态误差 */
-#define HEADING_KD (0.0f)        /* 微分系数 — 抑制震荡 */
+#define HEADING_KP (0.2f)        /* 比例系数 — 越大纠偏越猛 */
+#define HEADING_KI (0.0f)        /* 积分系数 — 消除稳态误差 */
+#define HEADING_KD (1.0f)        /* 微分系数 — 抑制震荡 */
 #define HEADING_MAX_OUT (50.0f)  /* 转向修正上限 */
 #define HEADING_MIN_OUT (-50.0f) /* 转向修正下限 */
 
