@@ -12,7 +12,7 @@
 #define HEADING_MIN_OUT (-50.0f) /* 转向修正下限 */
 
 /* 惯性导航模式下的基础行驶速度 */
-#define GYRO_BASE_SPEED (10)
+#define GYRO_BASE_SPEED (30)
 
 /* 外部声明：左右电机PID控制器实例 */
 extern pid_t pid_motor_l;

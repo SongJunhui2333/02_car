@@ -1,4 +1,5 @@
 #include "bsp_tick.h"
+#include "delay.h"
 
 static volatile uint64_t mTick = 0; // 当前滴答计数值
 
@@ -60,6 +61,7 @@ void systick_clear_tick(void)
 void SysTick_Handler(void)
 {
     systick_inc_tick();
+        Tick_SysTickCallback();
 
     // float a = 0.3; // 滤波系数，取值范围为0~1，越接近1，滤波效果越明显
     // if (mTick - speed_tick > 10)

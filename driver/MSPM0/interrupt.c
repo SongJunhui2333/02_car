@@ -75,9 +75,9 @@ void MOTOR_PID_INST_IRQHandler(void)
         encoder_l_count = 0;
         encoder_r_count = 0;
 
-        uint8_t send_speed[20];
-        sprintf((char *)send_speed, "%d,%d\n", filt_velocity_l, filt_velocity_r);
-        UART_print_string(DEBUG_INST, (char *)send_speed);
+        // uint8_t send_speed[20];
+        // sprintf((char *)send_speed, "%d,%d\n", filt_velocity_l, filt_velocity_r);
+        // UART_print_string(DEBUG_INST, (char *)send_speed);
 
         /* 使用编码器计数值作为速度反馈进行PID计算 */
         float ctrl_l = pid_calculate(&pid_motor_l, (float)filt_velocity_l);
@@ -177,29 +177,27 @@ void CONTROL_PID_INST_IRQHandler(void)
         float steering;
         float base_speed;
 
-        /* 刷新循迹传感器，判断是否有黑线 */
-        trace_reflash();
-        uint8_t line_detected = trace_black_line_detect();
 
-        if (line_detected)
-        {
-            /* ====== 模式1：循迹模式 ====== */
-            gyro_mode_active = 0; // 退出陀螺仪模式
-            base_speed = (float)TRACE_BASE_SPEED;
 
-            /* 死区处理：黑线在中心附近直行，避免抖动 */
-            if (trace_distance >= TRACE_CENTER_POS - TRACE_DEAD_ZONE &&
-                trace_distance <= TRACE_CENTER_POS + TRACE_DEAD_ZONE)
-            {
-                pid_set_setpoint(&pid_motor_l, base_speed);
-                pid_set_setpoint(&pid_motor_r, base_speed);
-                break;
-            }
-
-            /* 位置式PID：setpoint=4.5, feedback=trace_distance */
-            steering = pid_calculate(&trace_pid, trace_distance);
-        }
-        else
+        // if (line_detected)
+        // {
+        //     /* ====== 模式1：循迹模式（测试陀螺仪时注释掉） ====== */
+        //     gyro_mode_active = 0; // 退出陀螺仪模式
+        //     base_speed = (float)TRACE_BASE_SPEED;
+        //
+        //     /* 死区处理：黑线在中心附近直行，避免抖动 */
+        //     if (trace_distance >= TRACE_CENTER_POS - TRACE_DEAD_ZONE &&
+        //         trace_distance <= TRACE_CENTER_POS + TRACE_DEAD_ZONE)
+        //     {
+        //         pid_set_setpoint(&pid_motor_l, base_speed);
+        //         pid_set_setpoint(&pid_motor_r, base_speed);
+        //         break;
+        //     }
+        //
+        //     /* 位置式PID：setpoint=4.5, feedback=trace_distance */
+        //     steering = pid_calculate(&trace_pid, trace_distance);
+        // }
+        // else
         {
             /* ====== 模式2：陀螺仪惯性导航 ====== */
             base_speed = (float)GYRO_BASE_SPEED;
@@ -237,10 +235,10 @@ void CONTROL_PID_INST_IRQHandler(void)
             left_speed = 0.0f;
         if (right_speed < 0.0f)
             right_speed = 0.0f;
-        if (left_speed > 20.0f)
-            left_speed = 20.0f;
-        if (right_speed > 20.0f)
-            right_speed = 20.0f;
+        if (left_speed > 60.0f)
+            left_speed = 60.0f;
+        if (right_speed > 60.0f)
+            right_speed = 60.0f;
 
         /* 更新电机PID目标速度 */
         pid_set_setpoint(&pid_motor_l, left_speed);

@@ -9,6 +9,8 @@
 /**
  * Import the modules used in this configuration.
  */
+const ADC12    = scripting.addModule("/ti/driverlib/ADC12", {}, false);
+const ADC121   = ADC12.addInstance();
 const CAPTURE  = scripting.addModule("/ti/driverlib/CAPTURE", {}, false);
 const CAPTURE1 = CAPTURE.addInstance();
 const GPIO     = scripting.addModule("/ti/driverlib/GPIO", {}, false);
@@ -49,6 +51,17 @@ const pinFunction4     = system.clockTree["HFXT"];
 pinFunction4.inputFreq = 40;
 pinFunction4.enable    = true;
 
+ADC121.$name                      = "ADC12_0";
+ADC121.sampClkDiv                 = "DL_ADC12_CLOCK_DIVIDE_8";
+ADC121.repeatMode                 = true;
+ADC121.adcMem0_name               = "ADC_CH0";
+ADC121.sampleTime0                = "2 us";
+ADC121.enabledInterrupts          = ["DL_ADC12_INTERRUPT_MEM0_RESULT_LOADED"];
+ADC121.peripheral.adcPin0.$assign = "PA27";
+ADC121.adcPin0Config.$name        = "ti_driverlib_gpio_GPIOPinGeneric4";
+
+const Board = scripting.addModule("/ti/driverlib/Board", {}, false);
+
 CAPTURE1.$name                              = "CAPTURE_ULTRASONIC";
 CAPTURE1.timerClkPrescale                   = 80;
 CAPTURE1.timerPeriod                        = "50 ms";
@@ -58,8 +71,6 @@ CAPTURE1.ccp0PinConfig.hideOutputInversion  = scripting.forceWrite(false);
 CAPTURE1.ccp0PinConfig.onlyInternalResistor = scripting.forceWrite(false);
 CAPTURE1.ccp0PinConfig.passedPeripheralType = scripting.forceWrite("Digital");
 CAPTURE1.ccp0PinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric10";
-
-const Board = scripting.addModule("/ti/driverlib/Board", {}, false);
 
 GPIO1.$name                              = "DC_MOTOR";
 GPIO1.associatedPins.create(9);
@@ -94,40 +105,14 @@ GPIO1.associatedPins[8].direction        = "INPUT";
 GPIO1.associatedPins[8].internalResistor = "PULL_DOWN";
 GPIO1.associatedPins[8].pin.$assign      = "PB20";
 
-GPIO2.$name                              = "TRACE";
-GPIO2.associatedPins.create(8);
-GPIO2.associatedPins[0].$name            = "Sensor_1";
-GPIO2.associatedPins[0].direction        = "INPUT";
-GPIO2.associatedPins[0].internalResistor = "PULL_DOWN";
-GPIO2.associatedPins[0].pin.$assign      = "PB7";
-GPIO2.associatedPins[1].$name            = "Sensor_2";
-GPIO2.associatedPins[1].internalResistor = "PULL_DOWN";
-GPIO2.associatedPins[1].direction        = "INPUT";
-GPIO2.associatedPins[1].pin.$assign      = "PA2";
-GPIO2.associatedPins[2].$name            = "Sensor_3";
-GPIO2.associatedPins[2].internalResistor = "PULL_DOWN";
-GPIO2.associatedPins[2].direction        = "INPUT";
-GPIO2.associatedPins[2].pin.$assign      = "PA31";
-GPIO2.associatedPins[3].$name            = "Sensor_4";
-GPIO2.associatedPins[3].internalResistor = "PULL_DOWN";
-GPIO2.associatedPins[3].direction        = "INPUT";
-GPIO2.associatedPins[3].pin.$assign      = "PA14";
-GPIO2.associatedPins[4].$name            = "Sensor_5";
-GPIO2.associatedPins[4].direction        = "INPUT";
-GPIO2.associatedPins[4].internalResistor = "PULL_DOWN";
-GPIO2.associatedPins[4].pin.$assign      = "PA15";
-GPIO2.associatedPins[5].$name            = "Sensor_6";
-GPIO2.associatedPins[5].direction        = "INPUT";
-GPIO2.associatedPins[5].internalResistor = "PULL_DOWN";
-GPIO2.associatedPins[5].pin.$assign      = "PA16";
-GPIO2.associatedPins[6].$name            = "Sensor_7";
-GPIO2.associatedPins[6].direction        = "INPUT";
-GPIO2.associatedPins[6].internalResistor = "PULL_DOWN";
-GPIO2.associatedPins[6].pin.$assign      = "PA17";
-GPIO2.associatedPins[7].$name            = "Sensor_8";
-GPIO2.associatedPins[7].direction        = "INPUT";
-GPIO2.associatedPins[7].internalResistor = "PULL_DOWN";
-GPIO2.associatedPins[7].pin.$assign      = "PB8";
+GPIO2.$name                         = "Gray_Address";
+GPIO2.associatedPins.create(3);
+GPIO2.associatedPins[0].$name       = "PIN_0";
+GPIO2.associatedPins[0].pin.$assign = "PA14";
+GPIO2.associatedPins[1].$name       = "PIN_1";
+GPIO2.associatedPins[1].pin.$assign = "PA15";
+GPIO2.associatedPins[2].$name       = "PIN_2";
+GPIO2.associatedPins[2].pin.$assign = "PA16";
 
 I2C1.basicEnableController             = true;
 I2C1.advDigitalGlitchFilter            = "CLOCKS_1";
@@ -280,10 +265,11 @@ VREF.vrefPosPinConfig.$name = "ti_driverlib_gpio_GPIOPinGeneric5";
 pinFunction4.peripheral.$suggestSolution           = "SYSCTL";
 pinFunction4.peripheral.hfxInPin.$suggestSolution  = "PA5";
 pinFunction4.peripheral.hfxOutPin.$suggestSolution = "PA6";
-CAPTURE1.peripheral.$suggestSolution               = "TIMG8";
+ADC121.peripheral.$suggestSolution                 = "ADC0";
 Board.peripheral.$suggestSolution                  = "DEBUGSS";
 Board.peripheral.swclkPin.$suggestSolution         = "PA20";
 Board.peripheral.swdioPin.$suggestSolution         = "PA19";
+CAPTURE1.peripheral.$suggestSolution               = "TIMG8";
 PWM2.peripheral.$suggestSolution                   = "TIMG6";
 UART3.peripheral.$suggestSolution                  = "UART2";
 UART3.DMA_CHANNEL_RX.peripheral.$suggestSolution   = "DMA_CH0";

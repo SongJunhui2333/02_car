@@ -1,6 +1,8 @@
 eclipse.preferences.version=1
 encoding//Debug/driver/MSPM0/subdir_rules.mk=UTF-8
 encoding//Debug/driver/MSPM0/subdir_vars.mk=UTF-8
+encoding//Debug/driver/No_Mcu_Ganv_Grayscale_Sensor/subdir_rules.mk=UTF-8
+encoding//Debug/driver/No_Mcu_Ganv_Grayscale_Sensor/subdir_vars.mk=UTF-8
 encoding//Debug/driver/OLED_Hardware_I2C/subdir_rules.mk=UTF-8
 encoding//Debug/driver/OLED_Hardware_I2C/subdir_vars.mk=UTF-8
 encoding//Debug/driver/Trace/subdir_rules.mk=UTF-8

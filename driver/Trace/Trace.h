@@ -20,13 +20,12 @@
 #define TRACE_DEAD_ZONE (0.3f)
 
 /* 基础行驶速度（循迹时的默认电机目标速度） */
-#define TRACE_BASE_SPEED (20)
+#define TRACE_BASE_SPEED (30.0f)
 
 extern pid_t trace_pid;               /* 轨迹PID结构体 */
 extern volatile float trace_distance; /* 当前黑线位置（供外部使用） */
 
 uint8_t trace_black_line_detect(void);
-uint8_t read_trace_sensor_state(GPIO_Regs *gpio_port, uint32_t sensor_pin);
-void trace_reflash(void);
+
 
 #endif // TRACE_H
