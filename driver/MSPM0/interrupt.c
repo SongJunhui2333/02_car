@@ -56,9 +56,24 @@ void GROUP1_IRQHandler(void)
  */
 void MOTOR_PID_INST_IRQHandler(void)
 {
+    float a = 0.3; // 滤波系数，取值范围为0~1，越接近1，滤波效果越明显
+
     switch (DL_Timer_getPendingInterrupt(MOTOR_PID_INST))
     {
     case DL_TIMER_IIDX_LOAD: {
+
+        filt_velocity_l =
+            a * encoder_l_count +
+            (1 - a) * last_filt_velocitya_l;     // 简单算法滤波，此次速度取30%的权重，过往速度取70%的权重，让速度更平滑
+        last_filt_velocitya_l = filt_velocity_l; // 此次速度记录为“上次速度”
+
+        filt_velocity_r =
+            a * encoder_r_count +
+            (1 - a) * last_filt_velocitya_r;     // 简单算法滤波，此次速度取30%的权重，过往速度取70%的权重，让速度更平滑
+        last_filt_velocitya_r = filt_velocity_r; // 此次速度记录为“上次速度”
+
+        encoder_l_count = 0;
+        encoder_r_count = 0;
 
         uint8_t send_speed[20];
         sprintf((char *)send_speed, "%d,%d\n", filt_velocity_l, filt_velocity_r);

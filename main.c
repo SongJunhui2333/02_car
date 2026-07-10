@@ -70,6 +70,7 @@ int main(void)
     pid_init(&pid_motor_l, PID_INCREMENTAL, MOTOR_KP, MOTOR_KI, MOTOR_KD, 4000, 0);
     pid_init(&pid_motor_r, PID_INCREMENTAL, MOTOR_KP, MOTOR_KI, MOTOR_KD, 4000, 0);
     // 设置电机初始目标速度
+        // sprintf((char *)send_speed, "%d\n", filt_velocity_l * 10);
     pid_set_setpoint(&pid_motor_l, motor_l_target_speed);
     pid_set_setpoint(&pid_motor_r, motor_r_target_speed);
 
