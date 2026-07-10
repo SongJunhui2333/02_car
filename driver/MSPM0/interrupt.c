@@ -28,8 +28,8 @@ void GROUP1_IRQHandler(void)
 {
     switch (DL_GPIO_getPendingInterrupt(GPIOB))
     {
-    case DC_MOTOR_ENCODER2_A_IIDX: // 编码器2A引脚中断
-        encoder_r_count++;
+    case DC_MOTOR_ENCODER2_A_IIDX: // 编码器2（电机2=左轮）
+        encoder_l_count++;
         break;
 
     default:
@@ -38,8 +38,8 @@ void GROUP1_IRQHandler(void)
 
     switch (DL_GPIO_getPendingInterrupt(GPIOA))
     {
-    case DC_MOTOR_ENCODER1_A_IIDX: // 编码器1A引脚中断
-        encoder_l_count++;
+    case DC_MOTOR_ENCODER1_A_IIDX: // 编码器1（电机1=右轮）
+        encoder_r_count++;
         break;
 
     default:
@@ -88,8 +88,9 @@ void MOTOR_PID_INST_IRQHandler(void)
             ctrl_r = 20;
 
         /* 将PID输出转换为电机占空比并施加到电机 */
-        motor_set_duty(1, (uint16_t)(100 * ctrl_l));
-        motor_set_duty(2, (uint16_t)(100 * ctrl_r));
+        /* 注意：motor(1)=右轮, motor(2)=左轮，此处做映射交换 */
+        motor_set_duty(2, (uint16_t)(100 * ctrl_l)); // ctrl_l → 左轮(motor 2)
+        motor_set_duty(1, (uint16_t)(100 * ctrl_r)); // ctrl_r → 右轮(motor 1)
 
         break;
     }
@@ -177,8 +178,6 @@ void CONTROL_PID_INST_IRQHandler(void)
         float steering;
         float base_speed;
 
-
-
         // if (line_detected)
         // {
         //     /* ====== 模式1：循迹模式（测试陀螺仪时注释掉） ====== */
@@ -241,8 +240,8 @@ void CONTROL_PID_INST_IRQHandler(void)
             right_speed = 60.0f;
 
         /* 更新电机PID目标速度 */
-        pid_set_setpoint(&pid_motor_l, left_speed);
-        pid_set_setpoint(&pid_motor_r, right_speed);
+        pid_set_setpoint(&pid_motor_l, left_speed);  // left_speed → 左轮PID
+        pid_set_setpoint(&pid_motor_r, right_speed); // right_speed → 右轮PID
 
         break;
     }
