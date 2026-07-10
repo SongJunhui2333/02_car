@@ -3,8 +3,8 @@
 
 #include "ti_msp_dl_config.h"
 
-#define MOTOR_KP (0.7f)
-#define MOTOR_KI (0.0f)
+#define MOTOR_KP (0.35f)
+#define MOTOR_KI (0.09f)
 #define MOTOR_KD (0.0f)
 
 /* PID控制模式 */
