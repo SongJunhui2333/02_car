@@ -67,6 +67,8 @@ extern uint16_t motor_r_target_speed;
 
 uint8_t oled_buffer[200];
 
+int result_angle = 0;
+
 int main(void)
 {
     SYSCFG_DL_init();
@@ -163,34 +165,22 @@ int main(void)
         OLED_ShowString(5 * 8, 4, oled_buffer, 16);
         delay_ms(50);
 
-        // 无时基传感器常规任务，包含模拟量，数字量，归一化量
+        // 传感器数据处理
         No_Mcu_Ganv_Sensor_Task_Without_tick(&sensor);
-        // 获取传感器数字量结果(只有当有黑白值传入进去了之后才会有这个值！！)
+        Get_Normalize_For_User(&sensor, Normal);
         Digtal = Get_Digtal_For_User(&sensor);
+        // 计算角度线性偏移量
+        result_angle = CalculateNormalizedValue(Normal, 1);
+        // printf("Anolog
+        // %d-%d-%d-%d-%d-%d-%d-%d\r\n",Anolog[0],Anolog[1],Anolog[2],Anolog[3],Anolog[4],Anolog[5],Anolog[6],Anolog[7]);
         sprintf((char *)rx_buff, "Digtal %d-%d-%d-%d-%d-%d-%d-%d\r\n", (Digtal >> 0) & 0x01, (Digtal >> 1) & 0x01,
                 (Digtal >> 2) & 0x01, (Digtal >> 3) & 0x01, (Digtal >> 4) & 0x01, (Digtal >> 5) & 0x01,
                 (Digtal >> 6) & 0x01, (Digtal >> 7) & 0x01);
         UART_print_string(DEBUG_INST, (char *)rx_buff);
-        UART_print_string(PRINT_INST, (char *)rx_buff);
         memset(rx_buff, 0, 256);
-
-        // 获取传感器模拟量结果(有黑白值初始化后返回1 没有返回 0)
-        if (Get_Anolog_Value(&sensor, Anolog))
-        {
-            sprintf((char *)rx_buff, "Anolog %d-%d-%d-%d-%d-%d-%d-%d\r\n", Anolog[0], Anolog[1], Anolog[2], Anolog[3],
-                    Anolog[4], Anolog[5], Anolog[6], Anolog[7]);
-            UART_print_string(DEBUG_INST, (char *)rx_buff);
-            memset(rx_buff, 0, 256);
-        }
-
-        // 获取传感器归一化结果(只有当有黑白值传入进去了之后才会有这个值！！有黑白值初始化后返回1 没有返回 0)
-        if (Get_Normalize_For_User(&sensor, Normal))
-        {
-            sprintf((char *)rx_buff, "Normalize %d-%d-%d-%d-%d-%d-%d-%d\r\n", Normal[0], Normal[1], Normal[2],
-                    Normal[3], Normal[4], Normal[5], Normal[6], Normal[7]);
-            UART_print_string(DEBUG_INST, (char *)rx_buff);
-            memset(rx_buff, 0, 256);
-        }
-        Tick_delay(1000);
+        sprintf((char *)rx_buff, "result_angle:%d\n\n", result_angle);
+        UART_print_string(DEBUG_INST, rx_buff);
+        memset(rx_buff, 0, 256);
+        delay_ms(1000);
     }
 }

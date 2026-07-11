@@ -26,6 +26,6 @@ extern pid_t trace_pid;               /* 轨迹PID结构体 */
 extern volatile float trace_distance; /* 当前黑线位置（供外部使用） */
 
 uint8_t trace_black_line_detect(void);
-
+int32_t CalculateNormalizedValue(unsigned short Normal[8], uint8_t field);
 
 #endif // TRACE_H
