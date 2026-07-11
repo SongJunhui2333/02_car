@@ -68,6 +68,7 @@ extern uint16_t motor_r_target_speed;
 uint8_t oled_buffer[200];
 
 int result_angle = 0;
+volatile uint8_t g_line_detected = 0; /* 黑线检测标志（中断中读取） */
 
 int main(void)
 {
@@ -89,7 +90,7 @@ int main(void)
 
     // 循迹pid初始化
     pid_init(&trace_pid, PID_POSITION, TRACE_KP, TRACE_KI, TRACE_KD, TRACE_MAX_OUT, TRACE_MIN_OUT);
-    pid_set_setpoint(&trace_pid, TRACE_CENTER_POS); // 目标位置 = 传感器中心 4.5
+    pid_set_setpoint(&trace_pid, 0); // 目标偏移量 = 0（黑线居中）
 
     // 航向pid初始化（惯性导航用）
     pid_init(&pid_heading, PID_POSITION, HEADING_KP, HEADING_KI, HEADING_KD, HEADING_MAX_OUT, HEADING_MIN_OUT);
@@ -107,7 +108,7 @@ int main(void)
 
     uint16_t distVal = 0;
 
-    OLED_ShowString(0, 7, (uint8_t *)"WIT Demo", 8);
+    // OLED_ShowString(0, 7, (uint8_t *)"WIT Demo", 8);
 
     OLED_ShowString(0, 0, (uint8_t *)"Pitch", 8);
     OLED_ShowString(0, 2, (uint8_t *)" Roll", 8);
@@ -155,6 +156,8 @@ int main(void)
         // delay_ms(1000);
 
         distVal = Read_Ultrasonic();
+        sprintf((char *)oled_buffer, "dist: %4u", distVal);
+        OLED_ShowString(5*8, 7, oled_buffer, 8);
 
         // 陀螺仪测试代码
         sprintf((char *)oled_buffer, "%-6.1f", wit_data.pitch);
@@ -163,7 +166,7 @@ int main(void)
         OLED_ShowString(5 * 8, 2, oled_buffer, 16);
         sprintf((char *)oled_buffer, "%-6.1f", wit_data.yaw);
         OLED_ShowString(5 * 8, 4, oled_buffer, 16);
-        delay_ms(50);
+        // delay_ms(50);
 
         // 传感器数据处理
         No_Mcu_Ganv_Sensor_Task_Without_tick(&sensor);
@@ -171,16 +174,18 @@ int main(void)
         Digtal = Get_Digtal_For_User(&sensor);
         // 计算角度线性偏移量
         result_angle = CalculateNormalizedValue(Normal, 1);
+        // 更新黑线检测标志（供中断使用）
+        g_line_detected = (Digtal != 0xFF);
         // printf("Anolog
         // %d-%d-%d-%d-%d-%d-%d-%d\r\n",Anolog[0],Anolog[1],Anolog[2],Anolog[3],Anolog[4],Anolog[5],Anolog[6],Anolog[7]);
-        sprintf((char *)rx_buff, "Digtal %d-%d-%d-%d-%d-%d-%d-%d\r\n", (Digtal >> 0) & 0x01, (Digtal >> 1) & 0x01,
-                (Digtal >> 2) & 0x01, (Digtal >> 3) & 0x01, (Digtal >> 4) & 0x01, (Digtal >> 5) & 0x01,
-                (Digtal >> 6) & 0x01, (Digtal >> 7) & 0x01);
-        UART_print_string(DEBUG_INST, (char *)rx_buff);
-        memset(rx_buff, 0, 256);
-        sprintf((char *)rx_buff, "result_angle:%d\n\n", result_angle);
-        UART_print_string(DEBUG_INST, rx_buff);
-        memset(rx_buff, 0, 256);
-        delay_ms(1000);
+        // sprintf((char *)rx_buff, "Digtal %d-%d-%d-%d-%d-%d-%d-%d\r\n", (Digtal >> 0) & 0x01, (Digtal >> 1) & 0x01,
+        //         (Digtal >> 2) & 0x01, (Digtal >> 3) & 0x01, (Digtal >> 4) & 0x01, (Digtal >> 5) & 0x01,
+        //         (Digtal >> 6) & 0x01, (Digtal >> 7) & 0x01);
+        // UART_print_string(DEBUG_INST, (char *)rx_buff);
+        // memset(rx_buff, 0, 256);
+        // sprintf((char *)rx_buff, "result_angle:%d\n\n", result_angle);
+        // UART_print_string(DEBUG_INST, rx_buff);
+        // memset(rx_buff, 0, 256);
+        // delay_ms(50);
     }
 }

@@ -1,4 +1,5 @@
 #include "interrupt.h"
+#include "../No_Mcu_Ganv_Grayscale_Sensor/No_Mcu_Ganv_Grayscale_Sensor_Config.h"
 #include "../Trace/Trace.h"
 #include "../WIT/wit.h"
 #include "../bsp_tick.h"
@@ -9,6 +10,17 @@
 /* 外部声明：电机目标速度（在pid.c中定义） */
 extern uint16_t motor_l_target_speed;
 extern uint16_t motor_r_target_speed;
+
+extern unsigned char rx_buff[256];
+
+/* 外部声明：灰度传感器全局变量（在main.c中定义） */
+extern No_MCU_Sensor sensor;
+extern unsigned short Normal[8];
+extern unsigned char Digtal;
+extern int result_angle;
+
+/* 外部声明：黑线检测标志（在main.c中更新） */
+extern volatile uint8_t g_line_detected;
 
 uint16_t encoder_l_count = 0;
 uint16_t encoder_r_count = 0;
@@ -167,69 +179,69 @@ void UART_WIT_INST_IRQHandler(void)
  * @brief 控制PID中断服务函数（50ms触发一次）
  *
  * 两种模式自动切换：
- *   - 检测到黑线 → 循迹PID（位置式，trace_distance反馈）
- *   - 丢失黑线 → 陀螺仪航向保持PID（wit_data.yaw反馈）
+ *   模式1 - 循迹PID：检测到黑线时，使用result_angle计算转向修正
+ *   模式2 - 陀螺仪惯性导航：丢失黑线时，锁定当前航向，航向PID保持直线
+ *
+ * @note 灰度传感器读取和黑线检测在main.c的while循环中完成，
+ *       中断只读取全局变量result_angle和g_line_detected进行PID运算。
  */
 void CONTROL_PID_INST_IRQHandler(void)
 {
     switch (DL_Timer_getPendingInterrupt(CONTROL_PID_INST))
     {
     case DL_TIMER_IIDX_LOAD: {
-        float steering;
+        float steering = 0;
         float base_speed;
 
-        // if (line_detected)
-        // {
-        //     /* ====== 模式1：循迹模式（测试陀螺仪时注释掉） ====== */
-        //     gyro_mode_active = 0; // 退出陀螺仪模式
-        //     base_speed = (float)TRACE_BASE_SPEED;
-        //
-        //     /* 死区处理：黑线在中心附近直行，避免抖动 */
-        //     if (trace_distance >= TRACE_CENTER_POS - TRACE_DEAD_ZONE &&
-        //         trace_distance <= TRACE_CENTER_POS + TRACE_DEAD_ZONE)
-        //     {
-        //         pid_set_setpoint(&pid_motor_l, base_speed);
-        //         pid_set_setpoint(&pid_motor_r, base_speed);
-        //         break;
-        //     }
-        //
-        //     /* 位置式PID：setpoint=4.5, feedback=trace_distance */
-        //     steering = pid_calculate(&trace_pid, trace_distance);
-        // }
-        // else
+        if (g_line_detected)
+        {
+
+            sprintf((char *)rx_buff, "result_angle:%d\n", result_angle);
+            UART_print_string(DEBUG_INST, (char *)rx_buff);
+            memset(rx_buff, 0, 256);
+
+            /* ====== 模式1：循迹PID ====== */
+            gyro_mode_active = 0;
+            base_speed = (float)TRACE_BASE_SPEED;
+
+            /* 死区处理 */
+            if (result_angle > -200 && result_angle < 200)
+            {
+                pid_set_setpoint(&pid_motor_l, base_speed);
+                pid_set_setpoint(&pid_motor_r, base_speed);
+                break;
+            }
+
+            /* 位置式PID：setpoint=0, feedback=result_angle */
+            pid_set_setpoint(&trace_pid, 0);
+            steering = pid_calculate(&trace_pid, (float)result_angle);
+        }
+        else
         {
             /* ====== 模式2：陀螺仪惯性导航 ====== */
             base_speed = (float)GYRO_BASE_SPEED;
 
             if (!gyro_mode_active)
             {
-                /* 首次丢失黑线 → 锁定当前航向为目标 */
                 gyro_mode_active = 1;
                 heading_target = wit_data.yaw;
-                pid_reset(&pid_heading); // 清空陀螺仪PID历史
+                pid_reset(&pid_heading);
             }
 
-            /* 计算最短航向误差，处理 ±180° 跳变
-             *  例: target=170°, current=-170° → error=340° → 归一化= -20°
-             *  表示实际只偏了20°，往正方向转更短 */
             float heading_error = heading_target - wit_data.yaw;
             if (heading_error > 180.0f)
                 heading_error -= 360.0f;
             if (heading_error < -180.0f)
                 heading_error += 360.0f;
 
-            /* 航向PID：setpoint=0, feedback=heading_error
-             *  → error = 0 - heading_error = -heading_error
-             *  → 当heading_error>0（偏右），输出<0（左转），自动纠偏 */
             pid_set_setpoint(&pid_heading, 0);
             steering = pid_calculate(&pid_heading, heading_error);
         }
 
-        /* ====== 差速控制：左右轮差速转向 ====== */
-        float left_speed = base_speed + steering;
-        float right_speed = base_speed - steering;
+        /* ====== 差速控制 ====== */
+        float left_speed = base_speed - steering;
+        float right_speed = base_speed + steering;
 
-        /* 限幅保护 */
         if (left_speed < 0.0f)
             left_speed = 0.0f;
         if (right_speed < 0.0f)
@@ -239,9 +251,8 @@ void CONTROL_PID_INST_IRQHandler(void)
         if (right_speed > 60.0f)
             right_speed = 60.0f;
 
-        /* 更新电机PID目标速度 */
-        pid_set_setpoint(&pid_motor_l, left_speed);  // left_speed → 左轮PID
-        pid_set_setpoint(&pid_motor_r, right_speed); // right_speed → 右轮PID
+        pid_set_setpoint(&pid_motor_l, left_speed);
+        pid_set_setpoint(&pid_motor_r, right_speed);
 
         break;
     }
