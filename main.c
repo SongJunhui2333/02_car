@@ -162,6 +162,9 @@ void task_2(void)
     static uint8_t enc_count = 0;
     static uint8_t db_on = 0;    /* 有黑线消抖计数 */
     static uint8_t db_state = 0; /* 消抖后的黑线状态 */
+    static float save_trace_spd; /* 保存其他任务的循迹速度 */
+    static float save_gyro_spd;  /* 保存其他任务的陀螺仪速度 */
+    static float enc2_heading;   /* 第2次遇黑线时的航向，用于后续离开 */
 
     if (ind_tick > 0 && systick_get_tick() - ind_tick >= 1000)
     {
@@ -174,6 +177,12 @@ void task_2(void)
 
     if (ind_tick == 0)
     {
+        /* 保存并设置任务二的专属速度 */
+        save_trace_spd = trace_base_speed;
+        save_gyro_spd = gyro_base_speed;
+        trace_base_speed = 20.0f; /* 任务二循迹速度 */
+        gyro_base_speed = 30.0f;  /* 任务二陀螺仪速度 */
+
         led_on();
         buzzer_on();
         ind_tick = systick_get_tick();
@@ -197,9 +206,12 @@ void task_2(void)
         buzzer_on();
         ind_tick = systick_get_tick();
         if (enc_count == 1)
-            heading_target = 40.0f;
+            heading_target = 90.0f;
         else if (enc_count == 2)
-            heading_target = 140.0f;
+        {
+            heading_target = 60.0f;
+            enc2_heading = 90.0f; /* 保存第2次遇黑线航向 */
+        }
     }
 
     /* 下降沿：仅在消抖确认过黑线后才判定离开 */
@@ -209,10 +221,13 @@ void task_2(void)
         led_on();
         buzzer_on();
         ind_tick = systick_get_tick();
-        if (leave_count >= 2)
+        if (leave_count >= 2 && wit_data.yaw > 0.0f)
         {
             g_stop_flag = 1;
             heading_target = -38.0f;
+            /* 恢复原始速度 */
+            trace_base_speed = save_trace_spd;
+            gyro_base_speed = save_gyro_spd;
             start_tick = 0;
             prev_line = 0;
             has_ever_seen_line = 0;
@@ -223,7 +238,8 @@ void task_2(void)
         }
         else
         {
-            heading_target = -136.0f;
+            if (leave_count >= 2)
+                heading_target = enc2_heading;
         }
     }
 
@@ -243,6 +259,10 @@ void task_2(void)
     {
         db_state = 1;
         has_ever_seen_line = 1; /* 确认进入 */
+        if (leave_count == 0)
+        {
+            heading_target = -130.0f; /* 第一次确认进入 → 预设离开航向 */
+        }
     }
     if (!raw_line && has_ever_seen_line)
     {
