@@ -5,6 +5,8 @@
 #include "../bsp_tick.h"
 #include "../motor.h"
 #include "../uart.h"
+#include "clock.h"
+#include "key.h"
 #include "stdio.h"
 
 /* 外部声明：电机目标速度（在pid.c中定义） */
@@ -21,6 +23,7 @@ extern int result_angle;
 
 /* 外部声明：黑线检测标志（在main.c中更新） */
 extern volatile uint8_t g_line_detected;
+extern volatile uint8_t g_stop_flag;
 
 uint16_t encoder_l_count = 0;
 uint16_t encoder_r_count = 0;
@@ -33,8 +36,12 @@ pid_t pid_motor_r;
 pid_t pid_heading;
 
 /* ========== 惯性导航状态变量 ========== */
-static float heading_target = 0.0f;  /* 目标航向角，丢失黑线时锁定 */
-static uint8_t gyro_mode_active = 0; /* 是否处于陀螺仪导航模式 */
+uint8_t gyro_mode_active = 0;  /* 是否处于陀螺仪导航模式 */
+float heading_target = 0.0f;   /* 目标航向角，由用户在main.c中手动设置 */
+float gyro_base_speed = 20.0f; /* 陀螺仪导航基础速度，可运行时修改 */
+
+extern uint8_t key_state_flag;
+extern uint8_t key_start_flag;
 
 void GROUP1_IRQHandler(void)
 {
@@ -43,17 +50,41 @@ void GROUP1_IRQHandler(void)
     case DC_MOTOR_ENCODER2_A_IIDX: // 编码器2（电机2=左轮）
         encoder_l_count++;
         break;
-
+    case DC_MOTOR_ENCODER1_A_IIDX: // 编码器1（电机1=右轮）
+        encoder_r_count++;
+        break;
     default:
         break;
     }
 
     switch (DL_GPIO_getPendingInterrupt(GPIOA))
     {
-    case DC_MOTOR_ENCODER1_A_IIDX: // 编码器1（电机1=右轮）
-        encoder_r_count++;
-        break;
-
+    case KEY_K_1_IIDX: {
+        // 处理 Key_State_pin0 的中断
+        my_delay_ms(10);                          // 简单的消抖处理
+        if (get_key_state(KEY_PORT, KEY_K_1_PIN)) // 确认按键仍然被按下
+        {
+            key_state_flag = (key_state_flag + 1) % 5; // 设置按键状态标志位
+        }
+    }
+    break;
+    case KEY_K_2_IIDX: {
+        // 处理 Key_State_pin1 的中断
+        my_delay_ms(10);                          // 简单的消抖处理
+        if (get_key_state(KEY_PORT, KEY_K_2_PIN)) // 确认按键仍然被按下
+        {
+            key_state_flag = (key_state_flag - 1 + 5) % 5; // 设置按键状态标志位
+        }
+    }
+    break;
+    case KEY_K_3_IIDX: {
+        // 处理 Key_State_pin2 的中断
+        my_delay_ms(10);                          // 简单的消抖处理
+        if (get_key_state(KEY_PORT, KEY_K_3_PIN)) // 确认按键仍然被按下
+        {
+            key_start_flag = !key_start_flag; // 切换启动/停止标志位
+        }
+    }
     default:
         break;
     }
@@ -74,35 +105,37 @@ void MOTOR_PID_INST_IRQHandler(void)
     {
     case DL_TIMER_IIDX_LOAD: {
 
-        filt_velocity_l =
-            a * encoder_l_count +
-            (1 - a) * last_filt_velocitya_l;     // 简单算法滤波，此次速度取30%的权重，过往速度取70%的权重，让速度更平滑
-        last_filt_velocitya_l = filt_velocity_l; // 此次速度记录为“上次速度”
+        // filt_velocity_l =
+        //     a * encoder_l_count +
+        //     (1 - a) * last_filt_velocitya_l;     //
+        //     简单算法滤波，此次速度取30%的权重，过往速度取70%的权重，让速度更平滑
+        // last_filt_velocitya_l = filt_velocity_l; // 此次速度记录为“上次速度”
 
-        filt_velocity_r =
-            a * encoder_r_count +
-            (1 - a) * last_filt_velocitya_r;     // 简单算法滤波，此次速度取30%的权重，过往速度取70%的权重，让速度更平滑
-        last_filt_velocitya_r = filt_velocity_r; // 此次速度记录为“上次速度”
+        // filt_velocity_r =
+        //     a * encoder_r_count +
+        //     (1 - a) * last_filt_velocitya_r;     //
+        //     简单算法滤波，此次速度取30%的权重，过往速度取70%的权重，让速度更平滑
+        // last_filt_velocitya_r = filt_velocity_r; // 此次速度记录为“上次速度”
 
-        encoder_l_count = 0;
-        encoder_r_count = 0;
+        // encoder_l_count = 0;
+        // encoder_r_count = 0;
 
-        // uint8_t send_speed[20];
-        // sprintf((char *)send_speed, "%d,%d\n", filt_velocity_l, filt_velocity_r);
-        // UART_print_string(DEBUG_INST, (char *)send_speed);
+        // // uint8_t send_speed[20];
+        // // sprintf((char *)send_speed, "%d,%d\n", filt_velocity_l, filt_velocity_r);
+        // // UART_print_string(DEBUG_INST, (char *)send_speed);
 
-        /* 使用编码器计数值作为速度反馈进行PID计算 */
-        float ctrl_l = pid_calculate(&pid_motor_l, (float)filt_velocity_l);
-        float ctrl_r = pid_calculate(&pid_motor_r, (float)filt_velocity_r);
-        if (ctrl_l > 20)
-            ctrl_l = 20;
-        if (ctrl_r > 20)
-            ctrl_r = 20;
+        // /* 使用编码器计数值作为速度反馈进行PID计算 */
+        // float ctrl_l = pid_calculate(&pid_motor_l, (float)filt_velocity_l);
+        // float ctrl_r = pid_calculate(&pid_motor_r, (float)filt_velocity_r);
+        // if (ctrl_l > 20)
+        //     ctrl_l = 20;
+        // if (ctrl_r > 20)
+        //     ctrl_r = 20;
 
-        /* 将PID输出转换为电机占空比并施加到电机 */
-        /* 注意：motor(1)=右轮, motor(2)=左轮，此处做映射交换 */
-        motor_set_duty(2, (uint16_t)(100 * ctrl_l)); // ctrl_l → 左轮(motor 2)
-        motor_set_duty(1, (uint16_t)(100 * ctrl_r)); // ctrl_r → 右轮(motor 1)
+        // /* 将PID输出转换为电机占空比并施加到电机 */
+        // /* 注意：motor(1)=右轮, motor(2)=左轮，此处做映射交换 */
+        // motor_set_duty(2, (uint16_t)(100 * ctrl_l)); // ctrl_l → 左轮(motor 2)
+        // motor_set_duty(1, (uint16_t)(100 * ctrl_r)); // ctrl_r → 右轮(motor 1)
 
         break;
     }
@@ -187,72 +220,116 @@ void UART_WIT_INST_IRQHandler(void)
  */
 void CONTROL_PID_INST_IRQHandler(void)
 {
+    float a = 0.3; // 滤波系数，取值范围为0~1，越接近1，滤波效果越明显
     switch (DL_Timer_getPendingInterrupt(CONTROL_PID_INST))
     {
+
     case DL_TIMER_IIDX_LOAD: {
+
+        filt_velocity_l =
+            a * encoder_l_count +
+            (1 - a) * last_filt_velocitya_l;     // 简单算法滤波，此次速度取30%的权重，过往速度取70%的权重，让速度更平滑
+        last_filt_velocitya_l = filt_velocity_l; // 此次速度记录为“上次速度”
+
+        filt_velocity_r =
+            a * encoder_r_count +
+            (1 - a) * last_filt_velocitya_r;     // 简单算法滤波，此次速度取30%的权重，过往速度取70%的权重，让速度更平滑
+        last_filt_velocitya_r = filt_velocity_r; // 此次速度记录为“上次速度”
+
+        encoder_l_count = 0;
+        encoder_r_count = 0;
+
+        uint8_t send_speed[20];
+        sprintf((char *)send_speed, "%d,%d\n", filt_velocity_l, filt_velocity_r);
+        UART_print_string(DEBUG_INST, (char *)send_speed);
+
+        if (g_stop_flag)
+        {
+            motor_set_duty(1, 0);
+            motor_set_duty(2, 0);
+            pid_set_setpoint(&pid_motor_l, 0);
+            pid_set_setpoint(&pid_motor_r, 0);
+            break;
+        }
+
         float steering = 0;
         float base_speed;
 
+        Digtal = Get_Digtal_For_User(&sensor);
+
         if (g_line_detected)
         {
+            /* ====== 循迹PID模式 ====== */
 
-            sprintf((char *)rx_buff, "result_angle:%d\n", result_angle);
-            UART_print_string(DEBUG_INST, (char *)rx_buff);
-            memset(rx_buff, 0, 256);
-
-            /* ====== 模式1：循迹PID ====== */
-            gyro_mode_active = 0;
-            base_speed = (float)TRACE_BASE_SPEED;
-
-            /* 死区处理 */
-            if (result_angle > -200 && result_angle < 200)
-            {
-                pid_set_setpoint(&pid_motor_l, base_speed);
-                pid_set_setpoint(&pid_motor_r, base_speed);
-                break;
-            }
-
-            /* 位置式PID：setpoint=0, feedback=result_angle */
+            result_angle = CalculateNormalizedValue(Normal, 1) / 10;
             pid_set_setpoint(&trace_pid, 0);
             steering = pid_calculate(&trace_pid, (float)result_angle);
+            float left_speed = trace_base_speed - steering;
+            float right_speed = trace_base_speed + steering;
+            if (left_speed < 0.0f)
+                left_speed = 0.0f;
+            if (right_speed < 0.0f)
+                right_speed = 0.0f;
+            if (left_speed > 45.0f)
+                left_speed = 45.0f;
+            if (right_speed > 45.0f)
+                right_speed = 45.0f;
+            pid_set_setpoint(&pid_motor_l, left_speed);
+            pid_set_setpoint(&pid_motor_r, right_speed);
+            // sprintf((char *)rx_buff, "result_angle:%d,%.2f,%.2f,%d,%d\n", result_angle, left_speed, right_speed,
+            //         filt_velocity_l, filt_velocity_r);
+            // UART_print_string(DEBUG_INST, rx_buff);
+            // memset(rx_buff, 0, 256);
         }
         else
         {
             /* ====== 模式2：陀螺仪惯性导航 ====== */
-            base_speed = (float)GYRO_BASE_SPEED;
-
+            base_speed = gyro_base_speed;
             if (!gyro_mode_active)
             {
                 gyro_mode_active = 1;
-                heading_target = wit_data.yaw;
                 pid_reset(&pid_heading);
             }
-
             float heading_error = heading_target - wit_data.yaw;
             if (heading_error > 180.0f)
                 heading_error -= 360.0f;
             if (heading_error < -180.0f)
                 heading_error += 360.0f;
-
             pid_set_setpoint(&pid_heading, 0);
             steering = pid_calculate(&pid_heading, heading_error);
+
+            /* 差速控制 */
+            float left_speed = base_speed + steering;
+            float right_speed = base_speed - steering;
+            if (left_speed < 0.0f)
+                left_speed = 0.0f;
+            if (right_speed < 0.0f)
+                right_speed = 0.0f;
+            if (left_speed > 45.0f)
+                left_speed = 45.0f;
+            if (right_speed > 45.0f)
+                right_speed = 45.0f;
+            pid_set_setpoint(&pid_motor_l, left_speed);
+            pid_set_setpoint(&pid_motor_r, right_speed);
+
+            // /* ====== 无黑线 → 立即停车（循迹调试时启用） ====== */
+            // motor_set_duty(1, 0);
+            // motor_set_duty(2, 0);
+            // pid_set_setpoint(&pid_motor_l, 0);
+            // pid_set_setpoint(&pid_motor_r, 0);
         }
+        /* 使用编码器计数值作为速度反馈进行PID计算 */
+        float ctrl_l = pid_calculate(&pid_motor_l, (float)filt_velocity_l);
+        float ctrl_r = pid_calculate(&pid_motor_r, (float)filt_velocity_r);
+        if (ctrl_l > 20)
+            ctrl_l = 20;
+        if (ctrl_r > 20)
+            ctrl_r = 20;
 
-        /* ====== 差速控制 ====== */
-        float left_speed = base_speed - steering;
-        float right_speed = base_speed + steering;
-
-        if (left_speed < 0.0f)
-            left_speed = 0.0f;
-        if (right_speed < 0.0f)
-            right_speed = 0.0f;
-        if (left_speed > 60.0f)
-            left_speed = 60.0f;
-        if (right_speed > 60.0f)
-            right_speed = 60.0f;
-
-        pid_set_setpoint(&pid_motor_l, left_speed);
-        pid_set_setpoint(&pid_motor_r, right_speed);
+        /* 将PID输出转换为电机占空比并施加到电机 */
+        /* 注意：motor(1)=右轮, motor(2)=左轮，此处做映射交换 */
+        motor_set_duty(2, (uint16_t)(100 * ctrl_l)); // ctrl_l → 左轮(motor 2)
+        motor_set_duty(1, (uint16_t)(100 * ctrl_r)); // ctrl_r → 右轮(motor 1)
 
         break;
     }

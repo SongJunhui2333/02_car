@@ -30,6 +30,7 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "LED.h"
 #include "MSPM0/interrupt.h"
 #include "No_Mcu_Ganv_Grayscale_Sensor/No_Mcu_Ganv_Grayscale_Sensor_Config.h"
 #include "OLED_Hardware_I2C/oled_hardware_i2c.h"
@@ -37,6 +38,7 @@
 #include "Ultrasonic_Capture/ultrasonic_capture.h"
 #include "WIT/wit.h"
 #include "bsp_tick.h"
+#include "buzzer.h"
 #include "delay.h"
 #include "key.h"
 #include "motor.h"
@@ -69,6 +71,12 @@ uint8_t oled_buffer[200];
 
 int result_angle = 0;
 volatile uint8_t g_line_detected = 0; /* 黑线检测标志（中断中读取） */
+volatile uint8_t g_stop_flag = 0;     /* 停止标志（中断中读取） */
+uint8_t key_state_flag = 0;
+uint8_t key_start_flag = 0;
+
+extern uint8_t key_state_flag;
+extern uint8_t key_start_flag;
 
 int main(void)
 {
@@ -79,8 +87,9 @@ int main(void)
     // 电机初始化
     motor_init(1);
     motor_init(2);
-    NVIC_EnableIRQ(DC_MOTOR_GPIOA_INT_IRQN); // 使能编码器中断
-                                             // 电机pid初始化
+    NVIC_EnableIRQ(DC_MOTOR_INT_IRQN); // 使能编码器中断
+    NVIC_EnableIRQ(KEY_INT_IRQN);      // 使能按键中断
+    // 电机pid初始化
     pid_init(&pid_motor_l, PID_INCREMENTAL, MOTOR_KP, MOTOR_KI, MOTOR_KD, 4000, 0);
     pid_init(&pid_motor_r, PID_INCREMENTAL, MOTOR_KP, MOTOR_KI, MOTOR_KD, 4000, 0);
     // 设置电机初始目标速度
@@ -121,63 +130,90 @@ int main(void)
 
     Tick_delay(100);
 
+    /* 启动指示：蜂鸣器+LED亮1秒 */
+    led_on();
+    buzzer_on();
+    uint64_t ind_tick = systick_get_tick();
+
     while (1)
     {
         // delay_ms(1000);
         motor_set_direction(1, 2);
         motor_set_direction(2, 2);
-        // delay_ms(1000);
-        // motor_set_direction(1, 2);
 
-        // if (debug_rx_flag == 1)
-        // {
-        //     debug_rx_flag = 0;
-
-        //     UART_print_string(DEBUG_INST, (char *)uart_rx_buff);
-        //     UART_print_string(DEBUG_INST, "\r\n");
-
-        //     uart_rx_length = 0;
-        // }
-
-        // /* 持续处理串口接收的数据 */
-
-        // if (print_rx_flag)
-        // {
-        //     print_rx_flag = 0;
-
-        //     UART_print_string(PRINT_INST, (char *)uart_send_buff);
-
-        //     UART_print_string(PRINT_INST, "\r\n");
-
-        //     uart_rx_length = 0;
-        // }
-
-        // UART_print_string(DEBUG_INST, "hello ti\n");
-        // delay_ms(1000);
-
+        // 读取超声波测距值并显示在OLED上
         distVal = Read_Ultrasonic();
-        sprintf((char *)oled_buffer, "dist: %4u", distVal);
-        OLED_ShowString(5*8, 7, oled_buffer, 8);
+        // sprintf((char *)oled_buffer, "dist: %4u", distVal);
 
-        // 陀螺仪测试代码
+        // 显示按键状态和启动/停止标志位
+        sprintf((char *)oled_buffer, "%d,%d", key_start_flag, key_state_flag);
+        OLED_ShowString(5 * 8, 7, oled_buffer, 8);
+
+        // 显示WIT传感器数据
         sprintf((char *)oled_buffer, "%-6.1f", wit_data.pitch);
         OLED_ShowString(5 * 8, 0, oled_buffer, 16);
         sprintf((char *)oled_buffer, "%-6.1f", wit_data.roll);
         OLED_ShowString(5 * 8, 2, oled_buffer, 16);
         sprintf((char *)oled_buffer, "%-6.1f", wit_data.yaw);
         OLED_ShowString(5 * 8, 4, oled_buffer, 16);
-        // delay_ms(50);
 
         // 传感器数据处理
         No_Mcu_Ganv_Sensor_Task_Without_tick(&sensor);
         Get_Normalize_For_User(&sensor, Normal);
-        Digtal = Get_Digtal_For_User(&sensor);
-        // 计算角度线性偏移量
-        result_angle = CalculateNormalizedValue(Normal, 1);
-        // 更新黑线检测标志（供中断使用）
-        g_line_detected = (Digtal != 0xFF);
-        // printf("Anolog
-        // %d-%d-%d-%d-%d-%d-%d-%d\r\n",Anolog[0],Anolog[1],Anolog[2],Anolog[3],Anolog[4],Anolog[5],Anolog[6],Anolog[7]);
+
+        // 前0.5秒不更新黑线检测，消除上电时传感器干扰
+        if (systick_get_tick() >= 500)
+        {
+            g_line_detected = (Digtal != 0xFF);
+        }
+
+        /* 上升沿+下降沿检测 + 指示控制 */
+        {
+            static uint8_t prev_line = 0;
+            static uint8_t has_ever_seen_line = 0;
+            static uint8_t leave_count = 0;
+            static uint8_t enc_count = 0; /* 遇黑线次数 */
+
+            if (g_line_detected)
+                has_ever_seen_line = 1;
+
+            /* 上升沿：无黑线→有黑线（遇到黑线） */
+            if (!prev_line && g_line_detected)
+            {
+                enc_count++;
+                led_on();
+                buzzer_on();
+                ind_tick = systick_get_tick();
+            }
+
+            /* 下降沿：有黑线→无黑线（离开黑线） */
+            if (has_ever_seen_line && prev_line && !g_line_detected)
+            {
+                leave_count++;
+                led_on();
+                buzzer_on();
+                ind_tick = systick_get_tick();
+                if (leave_count >= 2)
+                {
+                    g_stop_flag = 1;
+                }
+                else
+                {
+                    heading_target = 180.0f;
+                }
+            }
+
+            prev_line = g_line_detected;
+        }
+
+        /* 蜂鸣器+LED亮1秒后自动熄灭 */
+        if (systick_get_tick() - ind_tick >= 1000)
+        {
+            led_off();
+            buzzer_off();
+        }
+
+        // printf("Anolog%d-%d-%d-%d-%d-%d-%d-%d\r\n",Anolog[0],Anolog[1],Anolog[2],Anolog[3],Anolog[4],Anolog[5],Anolog[6],Anolog[7]);
         // sprintf((char *)rx_buff, "Digtal %d-%d-%d-%d-%d-%d-%d-%d\r\n", (Digtal >> 0) & 0x01, (Digtal >> 1) & 0x01,
         //         (Digtal >> 2) & 0x01, (Digtal >> 3) & 0x01, (Digtal >> 4) & 0x01, (Digtal >> 5) & 0x01,
         //         (Digtal >> 6) & 0x01, (Digtal >> 7) & 0x01);
@@ -187,5 +223,12 @@ int main(void)
         // UART_print_string(DEBUG_INST, rx_buff);
         // memset(rx_buff, 0, 256);
         // delay_ms(50);
+
+        // led_on();
+        // buzzer_on();
+        // delay_ms(1000);
+        // led_off();
+        // buzzer_off();
+        // delay_ms(1000);
     }
 }

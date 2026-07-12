@@ -19,3 +19,12 @@ int mspm0_get_clock_ms(unsigned long *count)
     count[0] = tick_ms;
     return 0;
 }
+/**
+ * @brief  延时函数，延时指定毫秒数
+ * @param ms  延时的毫秒数
+ */
+void my_delay_ms(uint32_t ms)
+{
+    uint32_t cycles = (CPUCLK_FREQ / 1000) * ms;
+    delay_cycles(cycles);
+}

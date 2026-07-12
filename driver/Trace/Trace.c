@@ -10,6 +10,7 @@ float trace_get_num = 0;                                   /* 检测到轨迹的
 
 volatile float trace_distance = 0;
 volatile float last_trace_distance = 4.5;
+float trace_base_speed = 20.0f; /* 循迹基础速度，可运行时修改 */
 
 /**
  * @brief  计算角度偏移量
@@ -23,8 +24,8 @@ volatile float last_trace_distance = 4.5;
  */
 int32_t CalculateNormalizedValue(unsigned short Normal[8], uint8_t field)
 {
-    // 定义权值数组，从左到右对应-7,-5,-3,-1,1,3,5,7
-    const short weights[8] = {-7, -5, -3, -1, 1, 3, 5, 7};
+    // 定义权值数组，从左到右对应-7,-6,-4,-1,1,4,6,7
+    const short weights[8] = {-7, -6, -4, -1, 1, 4, 6, 7};
 
     int32_t weighted_sum = 0;  // 加权和
     int32_t original_sum = 0;  // 原始数据和
