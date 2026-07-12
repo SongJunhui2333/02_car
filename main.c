@@ -78,6 +78,148 @@ uint8_t key_start_flag = 0;
 extern uint8_t key_state_flag;
 extern uint8_t key_start_flag;
 
+/**
+ * @brief 任务一：循迹+陀螺仪导航综合任务
+ */
+void task_1(void)
+{
+    static uint64_t ind_tick = 0;
+    static uint64_t start_tick = 0; /* 任务启动时刻（用于0.5s防护） */
+    static uint8_t prev_line = 0;
+    static uint8_t has_ever_seen_line = 0;
+    static uint8_t leave_count = 0;
+    static uint8_t enc_count = 0;
+
+    /* 蜂鸣器+LED亮1秒后自动熄灭（放在最前，停车后仍生效） */
+    if (ind_tick > 0 && systick_get_tick() - ind_tick >= 1000)
+    {
+        led_off();
+        buzzer_off();
+    }
+
+    /* 任务已完成则直接返回，防止重复执行 */
+    if (g_stop_flag)
+        return;
+
+    if (ind_tick == 0)
+    {
+        led_on();
+        buzzer_on();
+        ind_tick = systick_get_tick();
+        start_tick = ind_tick;
+    }
+
+    /* 任务开始前0.5秒：强制航向为0，跳过边沿检测 */
+    if (systick_get_tick() - start_tick < 500)
+    {
+        heading_target = 0.0f;
+        return;
+    }
+
+    if (g_line_detected)
+        has_ever_seen_line = 1;
+
+    if (!prev_line && g_line_detected)
+    {
+        enc_count++;
+        led_on();
+        buzzer_on();
+        ind_tick = systick_get_tick();
+    }
+
+    if (has_ever_seen_line && prev_line && !g_line_detected)
+    {
+        leave_count++;
+        led_on();
+        buzzer_on();
+        ind_tick = systick_get_tick();
+        if (leave_count >= 2)
+        {
+            g_stop_flag = 1;
+            heading_target = 0.0f;
+            start_tick = 0;
+            prev_line = 0;
+            has_ever_seen_line = 0;
+            leave_count = 0;
+            enc_count = 0;
+        }
+        else
+        {
+            heading_target = 180.0f;
+        }
+    }
+
+    prev_line = g_line_detected;
+}
+
+void task_2(void)
+{
+    static uint64_t ind_tick = 0;
+    static uint64_t start_tick = 0;
+    static uint8_t prev_line = 0;
+    static uint8_t has_ever_seen_line = 0;
+    static uint8_t leave_count = 0;
+    static uint8_t enc_count = 0;
+
+    if (ind_tick > 0 && systick_get_tick() - ind_tick >= 1000)
+    {
+        led_off();
+        buzzer_off();
+    }
+
+    if (g_stop_flag)
+        return;
+
+    if (ind_tick == 0)
+    {
+        led_on();
+        buzzer_on();
+        ind_tick = systick_get_tick();
+        start_tick = ind_tick;
+    }
+
+    if (systick_get_tick() - start_tick < 500)
+    {
+        heading_target = -38.0f; /* 任务二初始航向 */
+        return;
+    }
+
+    if (g_line_detected)
+        has_ever_seen_line = 1;
+
+    if (!prev_line && g_line_detected)
+    {
+        enc_count++;
+        led_on();
+        buzzer_on();
+        ind_tick = systick_get_tick();
+    }
+
+    if (has_ever_seen_line && prev_line && !g_line_detected)
+    {
+        leave_count++;
+        led_on();
+        buzzer_on();
+        ind_tick = systick_get_tick();
+        if (leave_count >= 2)
+        {
+            g_stop_flag = 1;
+            heading_target = -40.0f;
+            start_tick = 0;
+            prev_line = 0;
+            has_ever_seen_line = 0;
+            leave_count = 0;
+            enc_count = 0;
+        }
+        else
+        {
+            heading_target = -134.0f; /* 第1次离黑线：掉头航向 */
+        }
+    }
+
+    prev_line = g_line_detected;
+}
+
 int main(void)
 {
     SYSCFG_DL_init();
@@ -130,11 +272,6 @@ int main(void)
 
     Tick_delay(100);
 
-    /* 启动指示：蜂鸣器+LED亮1秒 */
-    led_on();
-    buzzer_on();
-    uint64_t ind_tick = systick_get_tick();
-
     while (1)
     {
         // delay_ms(1000);
@@ -150,7 +287,7 @@ int main(void)
         OLED_ShowString(5 * 8, 7, oled_buffer, 8);
 
         // 显示WIT传感器数据
-        sprintf((char *)oled_buffer, "%-6.1f", wit_data.pitch);
+        sprintf((char *)oled_buffer, "%-6.1f", heading_target);
         OLED_ShowString(5 * 8, 0, oled_buffer, 16);
         sprintf((char *)oled_buffer, "%-6.1f", wit_data.roll);
         OLED_ShowString(5 * 8, 2, oled_buffer, 16);
@@ -167,50 +304,33 @@ int main(void)
             g_line_detected = (Digtal != 0xFF);
         }
 
-        /* 上升沿+下降沿检测 + 指示控制 */
+        /* 按键控制任务选择与启停 */
         {
-            static uint8_t prev_line = 0;
-            static uint8_t has_ever_seen_line = 0;
-            static uint8_t leave_count = 0;
-            static uint8_t enc_count = 0; /* 遇黑线次数 */
-
-            if (g_line_detected)
-                has_ever_seen_line = 1;
-
-            /* 上升沿：无黑线→有黑线（遇到黑线） */
-            if (!prev_line && g_line_detected)
+            static uint8_t prev_key = 0;
+            if (key_start_flag && !prev_key)
             {
-                enc_count++;
-                led_on();
-                buzzer_on();
-                ind_tick = systick_get_tick();
+                g_stop_flag = 0; /* 按键按下，清除停止标志 */
             }
-
-            /* 下降沿：有黑线→无黑线（离开黑线） */
-            if (has_ever_seen_line && prev_line && !g_line_detected)
-            {
-                leave_count++;
-                led_on();
-                buzzer_on();
-                ind_tick = systick_get_tick();
-                if (leave_count >= 2)
-                {
-                    g_stop_flag = 1;
-                }
-                else
-                {
-                    heading_target = 180.0f;
-                }
-            }
-
-            prev_line = g_line_detected;
+            prev_key = key_start_flag;
         }
 
-        /* 蜂鸣器+LED亮1秒后自动熄灭 */
-        if (systick_get_tick() - ind_tick >= 1000)
+        if (key_start_flag)
         {
-            led_off();
-            buzzer_off();
+            switch (key_state_flag)
+            {
+            case 1:
+                task_1();
+                break;
+            case 2:
+                task_2();
+                break;
+            default:
+                break;
+            }
+        }
+        else
+        {
+            g_stop_flag = 1;
         }
 
         // printf("Anolog%d-%d-%d-%d-%d-%d-%d-%d\r\n",Anolog[0],Anolog[1],Anolog[2],Anolog[3],Anolog[4],Anolog[5],Anolog[6],Anolog[7]);
