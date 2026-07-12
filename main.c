@@ -160,6 +160,8 @@ void task_2(void)
     static uint8_t has_ever_seen_line = 0;
     static uint8_t leave_count = 0;
     static uint8_t enc_count = 0;
+    static uint8_t db_on = 0;    /* 有黑线消抖计数 */
+    static uint8_t db_state = 0; /* 消抖后的黑线状态 */
 
     if (ind_tick > 0 && systick_get_tick() - ind_tick >= 1000)
     {
@@ -180,22 +182,28 @@ void task_2(void)
 
     if (systick_get_tick() - start_tick < 500)
     {
-        heading_target = -38.0f; /* 任务二初始航向 */
+        heading_target = -38.0f;
         return;
     }
 
-    if (g_line_detected)
-        has_ever_seen_line = 1;
+    /* ======== 第一层：原始信号 → 立即改变 heading_target ======== */
+    uint8_t raw_line = g_line_detected;
 
-    if (!prev_line && g_line_detected)
+    /* 上升沿：立即改变航向（不受消抖影响） */
+    if (!prev_line && raw_line)
     {
         enc_count++;
         led_on();
         buzzer_on();
         ind_tick = systick_get_tick();
+        if (enc_count == 1)
+            heading_target = 40.0f;
+        else if (enc_count == 2)
+            heading_target = 140.0f;
     }
 
-    if (has_ever_seen_line && prev_line && !g_line_detected)
+    /* 下降沿：仅在消抖确认过黑线后才判定离开 */
+    if (has_ever_seen_line && prev_line && !raw_line)
     {
         leave_count++;
         led_on();
@@ -204,20 +212,44 @@ void task_2(void)
         if (leave_count >= 2)
         {
             g_stop_flag = 1;
-            heading_target = -40.0f;
+            heading_target = -38.0f;
             start_tick = 0;
             prev_line = 0;
             has_ever_seen_line = 0;
             leave_count = 0;
             enc_count = 0;
+            db_on = 0;
+            db_state = 0;
         }
         else
         {
-            heading_target = -134.0f; /* 第1次离黑线：掉头航向 */
+            heading_target = -136.0f;
         }
     }
 
-    prev_line = g_line_detected;
+    prev_line = raw_line;
+
+    /* ======== 第二层：消抖进入，立即退出 ======== */
+    if (raw_line)
+    {
+        db_on++;
+    }
+    else
+    {
+        db_on = 0;
+    }
+
+    if (db_on >= 5)
+    {
+        db_state = 1;
+        has_ever_seen_line = 1; /* 确认进入 */
+    }
+    if (!raw_line && has_ever_seen_line)
+    {
+        db_state = 0; /* 确认过进入 + 无黑线 → 立即退出 */
+    }
+
+    g_line_detected = db_state;
 }
 
 int main(void)

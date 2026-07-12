@@ -317,7 +317,7 @@ void CONTROL_PID_INST_IRQHandler(void)
                     "d\n\n",
                     heading_target, base_speed, steering, heading_error, left_speed, right_speed, filt_velocity_l,
                     filt_velocity_r);
-            UART_print_string(DEBUG_INST, rx_buff);
+            UART_print_string(DEBUG_INST, (char*)rx_buff);
             memset(rx_buff, 0, 256);
 
             // /* ====== 无黑线 → 立即停车（循迹调试时启用） ====== */
