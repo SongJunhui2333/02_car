@@ -239,9 +239,9 @@ void CONTROL_PID_INST_IRQHandler(void)
         encoder_l_count = 0;
         encoder_r_count = 0;
 
-        // uint8_t send_speed[20];
-        // sprintf((char *)send_speed, "%d,%d\n", filt_velocity_l, filt_velocity_r);
-        // UART_print_string(DEBUG_INST, (char *)send_speed);
+        uint8_t send_speed[20];
+        sprintf((char *)send_speed, "%d,%d\n", filt_velocity_l, filt_velocity_r);
+        UART_print_string(DEBUG_INST, (char *)send_speed);
 
         if (g_stop_flag)
         {
@@ -317,7 +317,7 @@ void CONTROL_PID_INST_IRQHandler(void)
                     "d\n\n",
                     heading_target, base_speed, steering, heading_error, left_speed, right_speed, filt_velocity_l,
                     filt_velocity_r);
-            UART_print_string(DEBUG_INST, (char*)rx_buff);
+            UART_print_string(DEBUG_INST, (char *)rx_buff);
             memset(rx_buff, 0, 256);
 
             // /* ====== 无黑线 → 立即停车（循迹调试时启用） ====== */
@@ -326,6 +326,7 @@ void CONTROL_PID_INST_IRQHandler(void)
             // pid_set_setpoint(&pid_motor_l, 0);
             // pid_set_setpoint(&pid_motor_r, 0);
         }
+
         /* 使用编码器计数值作为速度反馈进行PID计算 */
         float ctrl_l = pid_calculate(&pid_motor_l, (float)filt_velocity_l);
         float ctrl_r = pid_calculate(&pid_motor_r, (float)filt_velocity_r);

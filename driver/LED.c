@@ -5,7 +5,7 @@
  */
 void led_on(void)
 {
-    DL_GPIO_setPins(LIGHT_PORT, LIGHT_LED_PIN);
+    DL_GPIO_clearPins(LIGHT_PORT, LIGHT_LED_PIN);
 }
 
 /**
@@ -13,7 +13,7 @@ void led_on(void)
  */
 void led_off(void)
 {
-    DL_GPIO_clearPins(LIGHT_PORT, LIGHT_LED_PIN);
+    DL_GPIO_setPins(LIGHT_PORT, LIGHT_LED_PIN);
 }
 
 /**

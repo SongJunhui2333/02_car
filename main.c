@@ -272,6 +272,167 @@ void task_2(void)
     g_line_detected = db_state;
 }
 
+void task_3(void)
+{
+    static uint64_t ind_tick = 0;
+    static uint64_t start_tick = 0;
+    static uint8_t prev_line = 0;
+    static uint8_t has_ever_seen_line = 0;
+    static uint8_t leave_count = 0;
+    static uint8_t enc_count = 0;
+    static uint8_t db_on = 0;              /* 有黑线消抖计数 */
+    static uint8_t db_state = 0;           /* 消抖后的黑线状态 */
+    static float save_trace_spd;           /* 保存其他任务的循迹速度 */
+    static float save_gyro_spd;            /* 保存其他任务的陀螺仪速度 */
+    static float enc2_heading;             /* 第2次遇黑线时的航向，用于后续离开 */
+    static uint8_t phase = 0;              /* 新增：0=初始循迹阶段, 1=原任务三流程 */
+    static uint64_t no_line_tick = 0;      /* 进入无黑线区域的时刻（用于上升沿1秒判定） */
+    static uint64_t rise_lockout_tick = 0; /* 上升沿冷却锁定期（防止抖动重复触发） */
+
+    if (ind_tick > 0 && systick_get_tick() - ind_tick >= 1000)
+    {
+        led_off();
+        buzzer_off();
+    }
+
+    if (g_stop_flag)
+        return;
+
+    if (ind_tick == 0)
+    {
+        /* 保存并设置任务三的专属速度 */
+        save_trace_spd = trace_base_speed;
+        save_gyro_spd = gyro_base_speed;
+        trace_base_speed = 20.0f; /* 任务三循迹速度 */
+        gyro_base_speed = 20.0f;  /* 任务三陀螺仪速度 */
+
+        led_on();
+        buzzer_on();
+        ind_tick = systick_get_tick();
+        start_tick = ind_tick;
+    }
+
+    uint8_t raw_line = g_line_detected;
+
+    /* ====== 阶段0：初始循迹（新增） ====== */
+    if (phase == 0)
+    {
+        /* 小车在黑线上自然循迹（中断中根据 g_line_detected 自动处理） */
+
+        /* 检测离开黑线（下降沿：prev_line && !raw_line） */
+        if (prev_line && !raw_line)
+        {
+            /* 离开黑线 → 进入阶段1（原任务三流程） */
+            phase = 1;
+            start_tick = systick_get_tick(); /* 重置时刻，用于阶段1的500ms保护 */
+            no_line_tick = start_tick;       /* 记录进入无黑线区域的时刻 */
+            pid_reset(&trace_pid);           /* 离开黑线后清除循迹PID积分值 */
+            led_on();                        /* 第一次进入无黑线区域，1秒声光提示 */
+            buzzer_on();
+            ind_tick = systick_get_tick();
+            prev_line = 0;
+            has_ever_seen_line = 0;
+            heading_target = 142.5f; /* 设置陀螺仪导航目标航向 */
+        }
+        else
+        {
+            prev_line = raw_line;
+        }
+        return; /* 阶段0不执行后续的阶段1逻辑 */
+    }
+
+    /* ====== 阶段1：原任务三流程（不变） ====== */
+    if (systick_get_tick() - start_tick < 500)
+    {
+        heading_target = 142.5f;
+        return;
+    }
+
+    /* ======== 第一层：原始信号 → 立即改变 heading_target ======== */
+    /* 上升沿：仅在无黑线行驶超过1秒 且 冷却期已过 才判定有效 */
+    if (!prev_line && raw_line && (systick_get_tick() - no_line_tick >= 1000) &&
+        (systick_get_tick() - rise_lockout_tick >= 500))
+    {
+        rise_lockout_tick = systick_get_tick(); /* 进入500ms冷却期，防止抖动重复触发 */
+        enc_count++;
+        led_on();
+        buzzer_on();
+        ind_tick = systick_get_tick();
+        if (enc_count == 1)
+            heading_target = -145.0f;
+        else if (enc_count == 2)
+        {
+            heading_target = -10.0f;
+            enc2_heading = -40.0f; /* 保存第2次遇黑线航向 */
+        }
+    }
+
+    /* 下降沿：仅在消抖确认过黑线后才判定离开 */
+    if (has_ever_seen_line && prev_line && !raw_line)
+    {
+        leave_count++;
+        if (leave_count == 1)
+        {
+            no_line_tick = systick_get_tick(); /* 记录进入无黑线区域的时刻 */
+            pid_reset(&trace_pid);             /* 离开黑线后清除循迹PID积分值 */
+        }
+        led_on();
+        buzzer_on();
+        ind_tick = systick_get_tick();
+        if (leave_count >= 2 && wit_data.yaw < -90.0f)
+        {
+            g_stop_flag = 1;
+            heading_target = 142.0f;
+            /* 恢复原始速度 */
+            trace_base_speed = save_trace_spd;
+            gyro_base_speed = save_gyro_spd;
+            start_tick = 0;
+            prev_line = 0;
+            has_ever_seen_line = 0;
+            leave_count = 0;
+            enc_count = 0;
+            db_on = 0;
+            db_state = 0;
+            phase = 0; /* 新增：重置阶段，方便下次重新运行 */
+            no_line_tick = 0;
+            rise_lockout_tick = 0;
+        }
+        else
+        {
+            if (leave_count >= 2)
+                heading_target = enc2_heading;
+        }
+    }
+
+    prev_line = raw_line;
+
+    /* ======== 第二层：消抖进入，立即退出 ======== */
+    if (raw_line)
+    {
+        db_on++;
+    }
+    else
+    {
+        db_on = 0;
+    }
+
+    if (db_on >= 5)
+    {
+        db_state = 1;
+        has_ever_seen_line = 1; /* 确认进入 */
+        if (leave_count == 0)
+        {
+            heading_target = 45.5f; /* 第一次确认进入 → 预设离开航向 */
+        }
+    }
+    if (!raw_line && has_ever_seen_line)
+    {
+        db_state = 0; /* 确认过进入 + 无黑线 → 立即退出 */
+    }
+
+    g_line_detected = db_state;
+}
+
 int main(void)
 {
     SYSCFG_DL_init();
@@ -336,8 +497,8 @@ int main(void)
 
         sprintf((char *)oled_buffer, "%-6.1f", wit_data.yaw);
         OLED_ShowString(5 * 8, 0, oled_buffer, 16);
-        // sprintf((char *)oled_buffer, "%-6.1f", heading_target);
-        // OLED_ShowString(5 * 8, 4, oled_buffer, 16);
+        sprintf((char *)oled_buffer, "target:%-6.1f", heading_target);
+        OLED_ShowString(0, 4, oled_buffer, 16);
 
         // 传感器数据处理
         No_Mcu_Ganv_Sensor_Task_Without_tick(&sensor);
@@ -368,6 +529,9 @@ int main(void)
                 break;
             case 2:
                 task_2();
+                break;
+            case 3:
+                task_3();
                 break;
             default:
                 break;
@@ -421,5 +585,8 @@ int main(void)
         // led_off();
         // buzzer_off();
         // delay_ms(1000);
+
+        // pid_set_setpoint(&pid_motor_l, motor_l_target_speed);
+        // pid_set_setpoint(&pid_motor_r, motor_r_target_speed);
     }
 }

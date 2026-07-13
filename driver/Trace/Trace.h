@@ -8,8 +8,8 @@
 
 /* ========== 循迹PID参数（可调） ========== */
 #define TRACE_KP (0.01f * 0.7f) /* 比例系数 — 越大转向越灵敏 */
-#define TRACE_KI (0.035f)       /* 积分系数 — 循迹一般不需要，先保持0 */
-#define TRACE_KD (0.04f * 0.3f) /* 微分系数 — 抑制震荡，让循迹更平滑 */
+#define TRACE_KI (0.05f)         /* 积分系数 — 循迹一般不需要，先保持0 */
+#define TRACE_KD (0.03f * 0.3f)        /* 微分系数 — 抑制震荡，让循迹更平滑 */
 #define TRACE_MAX_OUT (70.0f)   /* 输出上限 */
 #define TRACE_MIN_OUT (-70.0f)  /* 输出下限 */
 
