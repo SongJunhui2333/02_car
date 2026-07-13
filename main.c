@@ -272,6 +272,126 @@ void task_2(void)
     g_line_detected = db_state;
 }
 
+void task_3(void)
+{
+    static uint64_t ind_tick = 0;
+    static uint64_t start_tick = 0;
+    static uint8_t prev_line = 0;
+    static uint8_t has_ever_seen_line = 0;
+    static uint8_t leave_count = 0;
+    static uint8_t enc_count = 0;
+    static uint8_t db_on = 0;    /* 有黑线消抖计数 */
+    static uint8_t db_state = 0; /* 消抖后的黑线状态 */
+    static float save_trace_spd; /* 保存其他任务的循迹速度 */
+    static float save_gyro_spd;  /* 保存其他任务的陀螺仪速度 */
+    static float enc2_heading;   /* 第2次遇黑线时的航向，用于后续离开 */
+
+    if (ind_tick > 0 && systick_get_tick() - ind_tick >= 1000)
+    {
+        led_off();
+        buzzer_off();
+    }
+
+    if (g_stop_flag)
+        return;
+
+    if (ind_tick == 0)
+    {
+        /* 保存并设置任务二的专属速度 */
+        save_trace_spd = trace_base_speed;
+        save_gyro_spd = gyro_base_speed;
+        trace_base_speed = 20.0f; /* 任务二循迹速度 */
+        gyro_base_speed = 15.0f;  /* 任务二陀螺仪速度 */
+
+        led_on();
+        buzzer_on();
+        ind_tick = systick_get_tick();
+        start_tick = ind_tick;
+    }
+
+    if (systick_get_tick() - start_tick < 500)
+    {
+        heading_target = -38.0f;
+        return;
+    }
+
+    /* ======== 第一层：原始信号 → 立即改变 heading_target ======== */
+    uint8_t raw_line = g_line_detected;
+
+    /* 上升沿：立即改变航向（不受消抖影响） */
+    if (!prev_line && raw_line)
+    {
+        enc_count++;
+        led_on();
+        buzzer_on();
+        ind_tick = systick_get_tick();
+        if (enc_count == 1)
+            heading_target = 90.0f;
+        else if (enc_count == 2)
+        {
+            heading_target = 70.0f;
+            enc2_heading = 130.0f; /* 保存第2次遇黑线航向 */
+        }
+    }
+
+    /* 下降沿：仅在消抖确认过黑线后才判定离开 */
+    if (has_ever_seen_line && prev_line && !raw_line)
+    {
+        leave_count++;
+        led_on();
+        buzzer_on();
+        ind_tick = systick_get_tick();
+        if (leave_count >= 2 && wit_data.yaw > 0.0f &&wit_data.yaw<90.0f)
+        {
+            g_stop_flag = 1;
+            heading_target = -38.0f;
+            /* 恢复原始速度 */
+            trace_base_speed = save_trace_spd;
+            gyro_base_speed = save_gyro_spd;
+            start_tick = 0;
+            prev_line = 0;
+            has_ever_seen_line = 0;
+            leave_count = 0;
+            enc_count = 0;
+            db_on = 0;
+            db_state = 0;
+        }
+        else
+        {
+            if (leave_count >= 2)
+                heading_target = enc2_heading;
+        }
+    }
+
+    prev_line = raw_line;
+
+    /* ======== 第二层：消抖进入，立即退出 ======== */
+    if (raw_line)
+    {
+        db_on++;
+    }
+    else
+    {
+        db_on = 0;
+    }
+
+    if (db_on >= 5)
+    {
+        db_state = 1;
+        has_ever_seen_line = 1; /* 确认进入 */
+        if (leave_count == 0)
+        {
+            heading_target = -136.0f; /* 第一次确认进入 → 预设离开航向 */
+        }
+    }
+    if (!raw_line && has_ever_seen_line)
+    {
+        db_state = 0; /* 确认过进入 + 无黑线 → 立即退出 */
+    }
+
+    g_line_detected = db_state;
+}
+
 int main(void)
 {
     SYSCFG_DL_init();
@@ -373,6 +493,8 @@ int main(void)
             case 2:
                 task_2();
                 break;
+            case 3:
+                task_3();
             default:
                 break;
             }
@@ -381,6 +503,7 @@ int main(void)
         {
             g_stop_flag = 1;
         }
+
         motor_set_direction(1, 2);
         motor_set_direction(2, 2);
 
