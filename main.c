@@ -326,9 +326,6 @@ int main(void)
 
     while (1)
     {
-        // delay_ms(1000);
-        motor_set_direction(1, 2);
-        motor_set_direction(2, 2);
 
         // 读取超声波测距值并显示在OLED上
         distVal = Read_Ultrasonic();
@@ -384,6 +381,8 @@ int main(void)
         {
             g_stop_flag = 1;
         }
+        motor_set_direction(1, 2);
+        motor_set_direction(2, 2);
 
         // printf("Anolog%d-%d-%d-%d-%d-%d-%d-%d\r\n",Anolog[0],Anolog[1],Anolog[2],Anolog[3],Anolog[4],Anolog[5],Anolog[6],Anolog[7]);
         // sprintf((char *)rx_buff, "Digtal %d-%d-%d-%d-%d-%d-%d-%d\r\n", (Digtal >> 0) & 0x01, (Digtal >> 1) & 0x01,
@@ -401,6 +400,10 @@ int main(void)
         // delay_ms(1000);
         // led_off();
         // buzzer_off();
+        // delay_ms(1000);
+
+        // // 向从机发送开始指令
+        // UART_print_string(PRINT_INST, "#START$\n");
         // delay_ms(1000);
     }
 }
