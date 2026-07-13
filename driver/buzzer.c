@@ -1,12 +1,12 @@
 #include "buzzer.h"
 
-// 蜂鸣器低电平触发
+// 蜂鸣器高电平触发
 /**
  * @brief 打开蜂鸣器
  */
 void buzzer_on(void)
 {
-    DL_GPIO_clearPins(BUZZER_PORT, BUZZER_buzzer_PIN);
+    DL_GPIO_setPins(BUZZER_PORT, BUZZER_buzzer_PIN);
 }
 
 /**
@@ -14,7 +14,7 @@ void buzzer_on(void)
  */
 void buzzer_off(void)
 {
-    DL_GPIO_setPins(BUZZER_PORT, BUZZER_buzzer_PIN);
+    DL_GPIO_clearPins(BUZZER_PORT, BUZZER_buzzer_PIN);
 }
 
 /**

@@ -311,11 +311,7 @@ int main(void)
 
     uint16_t distVal = 0;
 
-    // OLED_ShowString(0, 7, (uint8_t *)"WIT Demo", 8);
-
-    OLED_ShowString(0, 0, (uint8_t *)"Pitch", 8);
-    OLED_ShowString(0, 2, (uint8_t *)" Roll", 8);
-    OLED_ShowString(0, 4, (uint8_t *)"  Yaw", 8);
+    OLED_ShowString(0, 2, (uint8_t *)"  Yaw", 8);
 
     // 根据黑白校准值初始化传感器
     No_MCU_Ganv_Sensor_Init(&sensor, white, black);
@@ -326,25 +322,22 @@ int main(void)
 
     while (1)
     {
-        // delay_ms(1000);
-        motor_set_direction(1, 2);
-        motor_set_direction(2, 2);
 
         // 读取超声波测距值并显示在OLED上
         distVal = Read_Ultrasonic();
-        // sprintf((char *)oled_buffer, "dist: %4u", distVal);
+        sprintf((char *)oled_buffer, "dist: %4u", distVal);
+        OLED_ShowString(0, 2, oled_buffer, 16);
 
         // 显示按键状态和启动/停止标志位
         sprintf((char *)oled_buffer, "%d,%d", key_start_flag, key_state_flag);
         OLED_ShowString(5 * 8, 7, oled_buffer, 8);
 
         // 显示WIT传感器数据
-        sprintf((char *)oled_buffer, "%-6.1f", heading_target);
-        OLED_ShowString(5 * 8, 0, oled_buffer, 16);
-        sprintf((char *)oled_buffer, "%-6.1f", wit_data.roll);
-        OLED_ShowString(5 * 8, 2, oled_buffer, 16);
+
         sprintf((char *)oled_buffer, "%-6.1f", wit_data.yaw);
-        OLED_ShowString(5 * 8, 4, oled_buffer, 16);
+        OLED_ShowString(5 * 8, 0, oled_buffer, 16);
+        // sprintf((char *)oled_buffer, "%-6.1f", heading_target);
+        // OLED_ShowString(5 * 8, 4, oled_buffer, 16);
 
         // 传感器数据处理
         No_Mcu_Ganv_Sensor_Task_Without_tick(&sensor);
@@ -384,6 +377,32 @@ int main(void)
         {
             g_stop_flag = 1;
         }
+
+        motor_set_direction(1, 2);
+        motor_set_direction(2, 2);
+
+        // UART_print_string(PRINT_INST, "Hello TI!\n");
+        // delay_ms(500);
+
+        // // 蓝牙串口检查代码
+        // if (debug_rx_flag)
+        // {
+        //     debug_rx_flag = 0;
+        //     UART_print_string(PRINT_INST, (char *)uart_rx_buff);
+        //     UART_print_string(PRINT_INST, "\n");
+        //     uart_rx_length = 0;
+        //     // memset(uart_rx_buff, 0, UART_RX_MAX_LENGTH);
+        // }
+        // if (print_rx_flag)
+        // {
+        //     print_rx_flag = 0;
+        //     // UART_print_string(PRINT_INST, (char *)uart_rx_buff);
+        //     // UART_print_string(PRINT_INST, "\n");
+        //     UART_print_string(DEBUG_INST, (char *)uart_rx_buff);
+        //     UART_print_string(DEBUG_INST, "\n");
+        //     uart_rx_length = 0;
+        //     // memset(uart_rx_buff, 0, UART_RX_MAX_LENGTH);
+        // }
 
         // printf("Anolog%d-%d-%d-%d-%d-%d-%d-%d\r\n",Anolog[0],Anolog[1],Anolog[2],Anolog[3],Anolog[4],Anolog[5],Anolog[6],Anolog[7]);
         // sprintf((char *)rx_buff, "Digtal %d-%d-%d-%d-%d-%d-%d-%d\r\n", (Digtal >> 0) & 0x01, (Digtal >> 1) & 0x01,

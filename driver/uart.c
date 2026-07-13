@@ -1,4 +1,5 @@
 #include "uart.h"
+#include <string.h>
 
 void UART_print_char(UART_Regs *uart, const uint8_t chr)
 {
@@ -104,6 +105,7 @@ void PRINT_INST_IRQHandler()
         }
         print_rx_flag = 1;
         uart_rx_buff[uart_rx_length] = '\0'; // Null-terminate the received string
+        // memset(uart_rx_buff, 0, UART_RX_MAX_LENGTH);
     }
     break;
     default:

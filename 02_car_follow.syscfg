@@ -138,14 +138,14 @@ GPIO3.associatedPins[2].interruptEn      = true;
 GPIO3.associatedPins[2].polarity         = "RISE";
 GPIO3.associatedPins[2].pin.$assign      = "PA28";
 
-GPIO4.$name                         = "LIGHT";
-GPIO4.associatedPins[0].$name       = "LED";
-GPIO4.associatedPins[0].pin.$assign = "PB7";
+GPIO4.$name                          = "LIGHT";
+GPIO4.associatedPins[0].$name        = "LED";
+GPIO4.associatedPins[0].initialValue = "SET";
+GPIO4.associatedPins[0].pin.$assign  = "PB7";
 
-GPIO5.$name                          = "BUZZER";
-GPIO5.associatedPins[0].$name        = "buzzer";
-GPIO5.associatedPins[0].initialValue = "SET";
-GPIO5.associatedPins[0].pin.$assign  = "PA17";
+GPIO5.$name                         = "BUZZER";
+GPIO5.associatedPins[0].$name       = "buzzer";
+GPIO5.associatedPins[0].pin.$assign = "PA17";
 
 I2C1.basicEnableController             = true;
 I2C1.advDigitalGlitchFilter            = "CLOCKS_1";
@@ -225,8 +225,8 @@ TIMER2.$name              = "CONTROL_PID";
 TIMER2.timerStartTimer    = true;
 TIMER2.timerMode          = "PERIODIC_UP";
 TIMER2.timerClkPrescale   = 100;
-TIMER2.timerPeriod        = "50 ms";
 TIMER2.interrupts         = ["LOAD"];
+TIMER2.timerPeriod        = "50 ms";
 TIMER2.peripheral.$assign = "TIMG7";
 
 UART1.$name                            = "DEBUG";
