@@ -72,6 +72,7 @@ uint8_t oled_buffer[200];
 int result_angle = 0;
 volatile uint8_t g_line_detected = 0; /* 黑线检测标志（中断中读取） */
 volatile uint8_t g_stop_flag = 0;     /* 停止标志（中断中读取） */
+volatile uint16_t g_car_distance = 0; /* 超声波测距值（全局共享，单位mm） */
 uint8_t key_state_flag = 0;
 uint8_t key_start_flag = 0;
 
@@ -288,6 +289,7 @@ void task_3(void)
     static uint8_t phase = 0;              /* 新增：0=初始循迹阶段, 1=原任务三流程 */
     static uint64_t no_line_tick = 0;      /* 进入无黑线区域的时刻（用于上升沿1秒判定） */
     static uint64_t rise_lockout_tick = 0; /* 上升沿冷却锁定期（防止抖动重复触发） */
+    static uint8_t dist_keep_mode = 0;     /* 跟车距离保持模式：0=关闭, 1=开启 */
 
     if (ind_tick > 0 && systick_get_tick() - ind_tick >= 1000)
     {
@@ -304,7 +306,7 @@ void task_3(void)
         save_trace_spd = trace_base_speed;
         save_gyro_spd = gyro_base_speed;
         trace_base_speed = 20.0f; /* 任务三循迹速度 */
-        gyro_base_speed = 20.0f;  /* 任务三陀螺仪速度 */
+        gyro_base_speed = 18.0f;  /* 任务三陀螺仪速度 */
 
         led_on();
         buzzer_on();
@@ -332,7 +334,7 @@ void task_3(void)
             ind_tick = systick_get_tick();
             prev_line = 0;
             has_ever_seen_line = 0;
-            heading_target = 142.5f; /* 设置陀螺仪导航目标航向 */
+            heading_target = 140.5f; /* 设置陀螺仪导航目标航向 */
         }
         else
         {
@@ -344,7 +346,7 @@ void task_3(void)
     /* ====== 阶段1：原任务三流程（不变） ====== */
     if (systick_get_tick() - start_tick < 500)
     {
-        heading_target = 142.5f;
+        heading_target = 140.5f;
         return;
     }
 
@@ -359,11 +361,13 @@ void task_3(void)
         buzzer_on();
         ind_tick = systick_get_tick();
         if (enc_count == 1)
-            heading_target = -145.0f;
+            heading_target = -140.0f;
         else if (enc_count == 2)
         {
             heading_target = -10.0f;
-            enc2_heading = -40.0f; /* 保存第2次遇黑线航向 */
+            enc2_heading = -20.0f;    /* 保存第2次遇黑线航向 */
+            trace_base_speed = 18.0f; /* 第二段循迹速度降低 */
+            dist_keep_mode = 0;       /* 关闭跟车距离保持模式 */
         }
     }
 
@@ -375,36 +379,31 @@ void task_3(void)
         {
             no_line_tick = systick_get_tick(); /* 记录进入无黑线区域的时刻 */
             pid_reset(&trace_pid);             /* 离开黑线后清除循迹PID积分值 */
+            dist_keep_mode = 1;                /* 开启跟车距离保持模式 */
         }
         led_on();
         buzzer_on();
         ind_tick = systick_get_tick();
-        if (leave_count >= 2 && wit_data.yaw < -90.0f)
-        {
-            g_stop_flag = 1;
-            heading_target = 142.0f;
-            /* 恢复原始速度 */
-            trace_base_speed = save_trace_spd;
-            gyro_base_speed = save_gyro_spd;
-            start_tick = 0;
-            prev_line = 0;
-            has_ever_seen_line = 0;
-            leave_count = 0;
-            enc_count = 0;
-            db_on = 0;
-            db_state = 0;
-            phase = 0; /* 新增：重置阶段，方便下次重新运行 */
-            no_line_tick = 0;
-            rise_lockout_tick = 0;
-        }
-        else
-        {
-            if (leave_count >= 2)
-                heading_target = enc2_heading;
-        }
+        if (leave_count >= 2)
+            heading_target = enc2_heading;
     }
 
     prev_line = raw_line;
+
+    /* ======== 跟车距离保持（第二次离开黑线后、第二次进入黑线前） ======== */
+    if (dist_keep_mode)
+    {
+        uint16_t dist = g_car_distance;
+        if (dist > 300)
+            dist = 250;                           /* 超量程时钳位到目标值，防止超声波误读导致急加速 */
+        int16_t dist_error = (int16_t)dist - 250; /* 距离误差，目标200mm */
+        float speed_adj = dist_error * 0.05f;     /* 比例增益：误差×0.05 */
+        gyro_base_speed = 15.0f + speed_adj;
+        if (gyro_base_speed < 5.0f)
+            gyro_base_speed = 5.0f; /* 最低速度 */
+        if (gyro_base_speed > 40.0f)
+            gyro_base_speed = 40.0f; /* 最高速度 */
+    }
 
     /* ======== 第二层：消抖进入，立即退出 ======== */
     if (raw_line)
@@ -422,12 +421,36 @@ void task_3(void)
         has_ever_seen_line = 1; /* 确认进入 */
         if (leave_count == 0)
         {
-            heading_target = 45.5f; /* 第一次确认进入 → 预设离开航向 */
+            heading_target = 40.0f; /* 第一次确认进入 → 预设离开航向 */
         }
     }
     if (!raw_line && has_ever_seen_line)
     {
         db_state = 0; /* 确认过进入 + 无黑线 → 立即退出 */
+    }
+
+    /* ======== 停车检测：第二次进入黑线循迹过程中 yaw < -80° 则停车 ======== */
+    if (!g_stop_flag && enc_count >= 2 && has_ever_seen_line && wit_data.yaw < -80.0f)
+    {
+        g_stop_flag = 1;
+        led_on(); /* 停车声光提示 */
+        buzzer_on();
+        ind_tick = systick_get_tick(); /* 1秒后自动熄灭 */
+        heading_target = 142.0f;
+        /* 恢复原始速度 */
+        trace_base_speed = save_trace_spd;
+        gyro_base_speed = save_gyro_spd;
+        start_tick = 0;
+        prev_line = 0;
+        has_ever_seen_line = 0;
+        leave_count = 0;
+        enc_count = 0;
+        db_on = 0;
+        db_state = 0;
+        phase = 0;
+        no_line_tick = 0;
+        rise_lockout_tick = 0;
+        dist_keep_mode = 0;
     }
 
     g_line_detected = db_state;
@@ -486,6 +509,7 @@ int main(void)
 
         // 读取超声波测距值并显示在OLED上
         distVal = Read_Ultrasonic();
+        g_car_distance = distVal;
         sprintf((char *)oled_buffer, "dist: %4u", distVal);
         OLED_ShowString(0, 2, oled_buffer, 16);
 
@@ -548,25 +572,24 @@ int main(void)
         // UART_print_string(PRINT_INST, "Hello TI!\n");
         // delay_ms(500);
 
-        // // 蓝牙串口检查代码
-        // if (debug_rx_flag)
-        // {
-        //     debug_rx_flag = 0;
-        //     UART_print_string(PRINT_INST, (char *)uart_rx_buff);
-        //     UART_print_string(PRINT_INST, "\n");
-        //     uart_rx_length = 0;
-        //     // memset(uart_rx_buff, 0, UART_RX_MAX_LENGTH);
-        // }
-        // if (print_rx_flag)
-        // {
-        //     print_rx_flag = 0;
-        //     // UART_print_string(PRINT_INST, (char *)uart_rx_buff);
-        //     // UART_print_string(PRINT_INST, "\n");
-        //     UART_print_string(DEBUG_INST, (char *)uart_rx_buff);
-        //     UART_print_string(DEBUG_INST, "\n");
-        //     uart_rx_length = 0;
-        //     // memset(uart_rx_buff, 0, UART_RX_MAX_LENGTH);
-        // }
+        /* 串口数据处理：回显 + 收到字符'1'则启动任务 */
+        if (print_rx_flag)
+        {
+            print_rx_flag = 0;
+            UART_print_string(DEBUG_INST, (char *)uart_rx_buff);
+            UART_print_string(DEBUG_INST, "\n");
+
+            // 检查接收到的串口数据中是否包含字符'1'，如果包含则设置 key_start_flag 为 1
+            for (uint8_t i = 0; i < uart_rx_length; i++)
+            {
+                if (uart_rx_buff[i] == '1')
+                {
+                    key_start_flag = 1;
+                    break;
+                }
+            }
+            uart_rx_length = 0;
+        }
 
         // printf("Anolog%d-%d-%d-%d-%d-%d-%d-%d\r\n",Anolog[0],Anolog[1],Anolog[2],Anolog[3],Anolog[4],Anolog[5],Anolog[6],Anolog[7]);
         // sprintf((char *)rx_buff, "Digtal %d-%d-%d-%d-%d-%d-%d-%d\r\n", (Digtal >> 0) & 0x01, (Digtal >> 1) & 0x01,
