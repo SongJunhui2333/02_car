@@ -297,11 +297,15 @@ void task_3(void)
 
     if (ind_tick == 0)
     {
-        /* 保存并设置任务二的专属速度 */
+        /* 保存并设置任务三的专属速度 */
         save_trace_spd = trace_base_speed;
         save_gyro_spd = gyro_base_speed;
-        trace_base_speed = 20.0f; /* 任务二循迹速度 */
-        gyro_base_speed = 15.0f;  /* 任务二陀螺仪速度 */
+        trace_base_speed = 20.0f;
+        gyro_base_speed = 15.0f;
+
+        /* 通过PRINT串口发送启动指令 */
+        UART_print_string(PRINT_INST, "11111");
+        UART_print_string(DEBUG_INST, "11111");
 
         led_on();
         buzzer_on();
@@ -341,7 +345,7 @@ void task_3(void)
         led_on();
         buzzer_on();
         ind_tick = systick_get_tick();
-        if (leave_count >= 2 && wit_data.yaw > 0.0f &&wit_data.yaw<90.0f)
+        if (leave_count >= 2 && wit_data.yaw > 0.0f && wit_data.yaw < 90.0f)
         {
             g_stop_flag = 1;
             heading_target = -38.0f;

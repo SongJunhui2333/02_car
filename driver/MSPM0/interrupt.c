@@ -312,13 +312,13 @@ void CONTROL_PID_INST_IRQHandler(void)
             pid_set_setpoint(&pid_motor_l, left_speed);
             pid_set_setpoint(&pid_motor_r, right_speed);
 
-            sprintf((char *)rx_buff,
-                    "heading_target:%.2f,\nbase_speed:%.2f,\nsteering:%.2f,\nheading_error:%.2f,\n%.2f,\n%.2f,\n%d,\n%"
-                    "d\n\n",
-                    heading_target, base_speed, steering, heading_error, left_speed, right_speed, filt_velocity_l,
-                    filt_velocity_r);
-            UART_print_string(DEBUG_INST, (char*)rx_buff);
-            memset(rx_buff, 0, 256);
+            // sprintf((char *)rx_buff,
+            //         "heading_target:%.2f,\nbase_speed:%.2f,\nsteering:%.2f,\nheading_error:%.2f,\n%.2f,\n%.2f,\n%d,\n%"
+            //         "d\n\n",
+            //         heading_target, base_speed, steering, heading_error, left_speed, right_speed, filt_velocity_l,
+            //         filt_velocity_r);
+            // UART_print_string(DEBUG_INST, (char*)rx_buff);
+            // memset(rx_buff, 0, 256);
 
             // /* ====== 无黑线 → 立即停车（循迹调试时启用） ====== */
             // motor_set_duty(1, 0);
