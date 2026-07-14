@@ -398,7 +398,7 @@ void task_3(void)
             dist = 250;                           /* 超量程时钳位到目标值，防止超声波误读导致急加速 */
         int16_t dist_error = (int16_t)dist - 250; /* 距离误差，目标200mm */
         float speed_adj = dist_error * 0.05f;     /* 比例增益：误差×0.05 */
-        gyro_base_speed = 15.0f + speed_adj;
+        gyro_base_speed = 18.0f + speed_adj;
         if (gyro_base_speed < 5.0f)
             gyro_base_speed = 5.0f; /* 最低速度 */
         if (gyro_base_speed > 40.0f)
@@ -454,6 +454,196 @@ void task_3(void)
     }
 
     g_line_detected = db_state;
+}
+
+void task_4(void)
+{
+/* ========== 用户可调参数（按需修改） ========== */
+#define TASK4_GYRO_ANGLE_1 (180.0f)    /* 第一次离开黑线后陀螺仪导航航向角 */
+#define TASK4_STRAIGHT_ANGLE (-45.0f)  /* 直行段航向角 */
+#define TASK4_STRAIGHT_ANGLE_2 (42.0f) /* 第二次直行段航向角 */
+#define TASK4_ENC_DIST (700)           /* 直行段编码器计数阈值（左右平均值） */
+#define TASK4_STOP_TIME_MS (4000)      /* 停止等待时间 (ms) */
+#define TASK4_GYRO_SPEED (20.0f)       /* 陀螺仪导航/直行段速度 */
+#define TASK4_TRACE_SPEED (20.0f)      /* 循迹段速度 */
+
+    static uint64_t ind_tick = 0;
+    static uint64_t start_tick = 0;
+    static uint8_t prev_line = 0;
+    static uint8_t has_ever_seen_line = 0;
+    static uint8_t phase = 0; /* 0=初始循迹, 1=第一次陀螺仪导航, 2=第一次循迹, 3=直行段, 4=停止等待, 5=第二次直行段 */
+    static float save_trace_spd;
+    static float save_gyro_spd;
+    static uint32_t enc_start_l;   /* 直行段起始左编码器值 */
+    static uint32_t enc_start_r;   /* 直行段起始右编码器值 */
+    static uint64_t stop_tick = 0; /* 停止等待起始时刻 */
+
+    /* 1秒声光自动熄灭（放在最前，停车后仍生效） */
+    if (ind_tick > 0 && systick_get_tick() - ind_tick >= 1000)
+    {
+        led_off();
+        buzzer_off();
+    }
+
+    if (g_stop_flag)
+        return;
+
+    if (ind_tick == 0)
+    {
+        save_trace_spd = trace_base_speed;
+        save_gyro_spd = gyro_base_speed;
+        trace_base_speed = TASK4_TRACE_SPEED;
+        gyro_base_speed = TASK4_GYRO_SPEED;
+
+        led_on();
+        buzzer_on();
+        ind_tick = systick_get_tick();
+        start_tick = ind_tick;
+    }
+
+    uint8_t raw_line = g_line_detected;
+
+    /* ====== 阶段0：初始循迹 ====== */
+    if (phase == 0)
+    {
+        if (prev_line && !raw_line)
+        {
+            phase = 1;
+            led_on(); /* 离开黑线，1秒声光提示 */
+            buzzer_on();
+            ind_tick = systick_get_tick();
+            start_tick = systick_get_tick();
+            prev_line = 0;
+            has_ever_seen_line = 0;
+            heading_target = TASK4_GYRO_ANGLE_1;
+        }
+        else
+        {
+            prev_line = raw_line;
+        }
+        return;
+    }
+
+    /* ====== 阶段1：第一次陀螺仪导航（等遇线） ====== */
+    if (phase == 1)
+    {
+        if (systick_get_tick() - start_tick < 500)
+        {
+            heading_target = TASK4_GYRO_ANGLE_1;
+            return;
+        }
+
+        if (!prev_line && raw_line)
+        {
+            phase = 2;
+            led_on(); /* 遇到黑线，1秒声光提示 */
+            buzzer_on();
+            ind_tick = systick_get_tick();
+            pid_reset(&trace_pid);
+            prev_line = raw_line;
+        }
+        else
+        {
+            prev_line = raw_line;
+        }
+        return;
+    }
+
+    /* ====== 阶段2：第一次循迹（等离开） ====== */
+    if (phase == 2)
+    {
+        if (has_ever_seen_line && prev_line && !raw_line)
+        {
+            phase = 3;
+            led_on(); /* 离开黑线，1秒声光提示 */
+            buzzer_on();
+            ind_tick = systick_get_tick();
+            pid_reset(&trace_pid);
+            enc_start_l = encoder_l_total; /* 记录直行段起始编码器值 */
+            enc_start_r = encoder_r_total;
+            heading_target = TASK4_STRAIGHT_ANGLE;
+        }
+
+        if (raw_line)
+            has_ever_seen_line = 1;
+
+        prev_line = raw_line;
+        return;
+    }
+
+    /* ====== 阶段3：直行段（按角度走设定距离） ====== */
+    if (phase == 3)
+    {
+        uint32_t enc_avg_now = (encoder_l_total + encoder_r_total) / 2;
+        uint32_t enc_avg_start = (enc_start_l + enc_start_r) / 2;
+
+        if (enc_avg_now - enc_avg_start >= TASK4_ENC_DIST)
+        {
+            phase = 4;
+            stop_tick = systick_get_tick(); /* 记录停止时刻 */
+            motor_set_duty(1, 0);           /* 电机停转 */
+            motor_set_duty(2, 0);
+        }
+
+        prev_line = raw_line;
+        return;
+    }
+
+    /* ====== 阶段4：停止等待 ====== */
+    if (phase == 4)
+    {
+        motor_set_duty(1, 0);
+        motor_set_duty(2, 0);
+        pid_set_setpoint(&pid_motor_l, 0);
+        pid_set_setpoint(&pid_motor_r, 0);
+        DL_Timer_stopCounter(CONTROL_PID_INST);
+
+        if (systick_get_tick() - stop_tick >= TASK4_STOP_TIME_MS)
+        {
+            phase = 5;
+            DL_Timer_startCounter(CONTROL_PID_INST); /* 重新开启控制定时器 */
+            enc_start_l = encoder_l_total;           /* 记录第二次直行编码器起始值 */
+            enc_start_r = encoder_r_total;
+            heading_target = TASK4_STRAIGHT_ANGLE_2;
+            start_tick = systick_get_tick();
+        }
+
+        prev_line = raw_line;
+        return;
+    }
+
+    /* ====== 阶段5：第二次直行段（遇黑线停车） ====== */
+    if (systick_get_tick() - start_tick < 500)
+    {
+        heading_target = TASK4_STRAIGHT_ANGLE_2;
+        return;
+    }
+
+    if (has_ever_seen_line && prev_line && raw_line)
+    {
+        /* 遇黑线 → 停车结束 */
+        g_stop_flag = 1;
+        led_on();
+        buzzer_on();
+        ind_tick = systick_get_tick();
+        heading_target = 0.0f;
+        trace_base_speed = save_trace_spd;
+        gyro_base_speed = save_gyro_spd;
+        /* 重置所有状态 */
+        start_tick = 0;
+        prev_line = 0;
+        has_ever_seen_line = 0;
+        phase = 0;
+        enc_start_l = 0;
+        enc_start_r = 0;
+        stop_tick = 0;
+        return;
+    }
+
+    if (raw_line)
+        has_ever_seen_line = 1;
+
+    prev_line = raw_line;
 }
 
 int main(void)
@@ -556,6 +746,9 @@ int main(void)
                 break;
             case 3:
                 task_3();
+                break;
+            case 4:
+                task_4();
                 break;
             default:
                 break;

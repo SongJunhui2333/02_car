@@ -27,6 +27,8 @@ extern volatile uint8_t g_stop_flag;
 
 uint16_t encoder_l_count = 0;
 uint16_t encoder_r_count = 0;
+uint32_t encoder_l_total = 0; /* 左轮编码器累计计数值（永不清零） */
+uint32_t encoder_r_total = 0; /* 右轮编码器累计计数值（永不清零） */
 
 /* 创建左右电机PID控制器实例 */
 pid_t pid_motor_l;
@@ -49,9 +51,11 @@ void GROUP1_IRQHandler(void)
     {
     case DC_MOTOR_ENCODER2_A_IIDX: // 编码器2（电机2=左轮）
         encoder_l_count++;
+        encoder_l_total++;
         break;
     case DC_MOTOR_ENCODER1_A_IIDX: // 编码器1（电机1=右轮）
         encoder_r_count++;
+        encoder_r_total++;
         break;
     default:
         break;

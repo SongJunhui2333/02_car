@@ -27,5 +27,7 @@ extern pid_t pid_heading;
 /* 外部声明：编码器计数值 */
 extern uint16_t encoder_l_count;
 extern uint16_t encoder_r_count;
+extern uint32_t encoder_l_total; /* 左轮编码器累计计数值（永不清零） */
+extern uint32_t encoder_r_total; /* 右轮编码器累计计数值（永不清零） */
 
 #endif // INTERRUPT_H
