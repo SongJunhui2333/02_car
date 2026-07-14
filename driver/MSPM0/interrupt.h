@@ -17,6 +17,12 @@ extern float gyro_base_speed;
 /* 目标航向角，由用户在main.c中手动设置后再进入惯性导航 */
 extern float heading_target;
 
+/* 外部声明：编码器计数值 */
+extern uint16_t encoder_l_count;
+extern uint16_t encoder_r_count;
+extern volatile uint64_t encoder_l_total;
+extern volatile uint64_t encoder_r_total;
+
 /* 外部声明：左右电机PID控制器实例 */
 extern pid_t pid_motor_l;
 extern pid_t pid_motor_r;

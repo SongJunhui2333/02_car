@@ -301,7 +301,7 @@ void task_3(void)
         save_trace_spd = trace_base_speed;
         save_gyro_spd = gyro_base_speed;
         trace_base_speed = 20.0f;
-        gyro_base_speed = 15.0f;
+        gyro_base_speed = 17.0f;
 
         /* 通过PRINT串口发送启动指令 */
         UART_print_string(PRINT_INST, "11111");
@@ -394,6 +394,151 @@ void task_3(void)
     }
 
     g_line_detected = db_state;
+}
+
+void task_4(void)
+{
+    /* ===== 可调参数（用户设定） ===== */
+    static float gyro_angle_1 = -45.0f; /* 第1段陀螺仪目标航向 */
+    static float gyro_dist_1 = 700.0f;  /* 第1段陀螺仪行驶距离（编码器脉冲数） */
+    static uint32_t stop_time = 5000;   /* 停止等待时间（ms） */
+    static float gyro_angle_2 = 43.0f;  /* 停止后转向航向 */
+    static float gyro_angle_3 = 180.0f; /* 第1次离黑线后的陀螺仪航向 */
+
+    /* ===== 状态机 ===== */
+    enum
+    {
+        S4_INIT,
+        S4_GYRO1,
+        S4_STOP1,
+        S4_GYRO2,
+        S4_TRACE1,
+        S4_GYRO3,
+        S4_TRACE2,
+        S4_DONE
+    };
+    static uint8_t state = S4_INIT;
+    static uint64_t ind_tick = 0;
+    static uint64_t start_tick = 0;
+    static uint32_t dist_start = 0; /* 距离起点编码器总值 */
+
+    /* 蜂鸣器+LED熄灭 */
+    if (ind_tick > 0 && systick_get_tick() - ind_tick >= 1000)
+    {
+        led_off();
+        buzzer_off();
+    }
+
+    if (g_stop_flag)
+        return;
+
+    switch (state)
+    {
+    case S4_INIT:
+        if (ind_tick == 0)
+        {
+            led_on();
+            buzzer_on();
+            ind_tick = systick_get_tick();
+            start_tick = ind_tick;
+            UART_print_string(PRINT_INST, "11111");
+        }
+        if (systick_get_tick() - start_tick < 500)
+        {
+            heading_target = gyro_angle_1;
+            return;
+        }
+        /* 保存起始编码器值，进入第1段陀螺仪导航 */
+        dist_start = (encoder_l_total + encoder_r_total) / 2;
+        state = S4_GYRO1;
+        break;
+
+    case S4_GYRO1:
+        heading_target = gyro_angle_1;
+        /* 检测是否到达设定距离 */
+        if (((encoder_l_total + encoder_r_total) / 2 - dist_start) >= gyro_dist_1)
+        {
+            state = S4_STOP1;
+            start_tick = systick_get_tick();
+        }
+        break;
+
+    case S4_STOP1:
+        /* 重置电机PID清除积分项，防止中断继续输出 */
+        pid_reset(&pid_motor_l);
+        pid_reset(&pid_motor_r);
+        motor_set_duty(1, 0);
+        motor_set_duty(2, 0);
+        pid_set_setpoint(&pid_motor_l, 0);
+        pid_set_setpoint(&pid_motor_r, 0);
+        DL_Timer_stopCounter(CONTROL_PID_INST);
+
+        if (systick_get_tick() - start_tick >= stop_time)
+        {
+            DL_Timer_startCounter(CONTROL_PID_INST); /* 重新启动控制中断 */
+            heading_target = gyro_angle_2;
+            state = S4_GYRO2;
+        }
+        break;
+
+    case S4_GYRO2:
+        heading_target = gyro_angle_2;
+        /* 遇到黑线 → 声光提示 */
+        if (g_line_detected)
+        {
+            led_on();
+            buzzer_on();
+            ind_tick = systick_get_tick();
+            state = S4_TRACE1;
+        }
+        break;
+
+    case S4_TRACE1:
+        /* 离开黑线 → 声光提示 */
+        if (!g_line_detected)
+        {
+            led_on();
+            buzzer_on();
+            ind_tick = systick_get_tick();
+            heading_target = gyro_angle_3;
+            dist_start = (encoder_l_total + encoder_r_total) / 2;
+            state = S4_GYRO3;
+        }
+        break;
+
+    case S4_GYRO3:
+        heading_target = gyro_angle_3;
+        /* 直行直到再次遇到黑线 → 声光提示 */
+        if (g_line_detected)
+        {
+            led_on();
+            buzzer_on();
+            ind_tick = systick_get_tick();
+            state = S4_TRACE2;
+        }
+        break;
+
+    case S4_TRACE2:
+        /* 离开黑线 → 停车 + 声光提示 */
+        if (!g_line_detected)
+        {
+            led_on();
+            buzzer_on();
+            ind_tick = systick_get_tick();
+            g_stop_flag = 1;
+            heading_target = 0.0f;
+            /* 重置状态以便下次启动 */
+            state = S4_INIT;
+            ind_tick = 0;
+            start_tick = 0;
+            dist_start = 0;
+        }
+        break;
+
+    case S4_DONE:
+    default:
+        break;
+    }
 }
 
 int main(void)
@@ -499,6 +644,10 @@ int main(void)
                 break;
             case 3:
                 task_3();
+                break;
+            case 4:
+                task_4();
+                break;
             default:
                 break;
             }
