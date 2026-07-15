@@ -301,7 +301,7 @@ void task_3(void)
         save_trace_spd = trace_base_speed;
         save_gyro_spd = gyro_base_speed;
         trace_base_speed = 20.0f;
-        gyro_base_speed = 17.0f;
+        gyro_base_speed = 18.0f;
 
         /* 通过PRINT串口发送启动指令 */
         UART_print_string(PRINT_INST, "11111");
@@ -315,7 +315,7 @@ void task_3(void)
 
     if (systick_get_tick() - start_tick < 500)
     {
-        heading_target = -38.0f;
+        heading_target = -39.0f;
         return;
     }
 
@@ -330,7 +330,7 @@ void task_3(void)
         buzzer_on();
         ind_tick = systick_get_tick();
         if (enc_count == 1)
-            heading_target = 90.0f;
+            heading_target = 60.0f;
         else if (enc_count == 2)
         {
             heading_target = 70.0f;
@@ -385,7 +385,7 @@ void task_3(void)
         has_ever_seen_line = 1; /* 确认进入 */
         if (leave_count == 0)
         {
-            heading_target = -136.0f; /* 第一次确认进入 → 预设离开航向 */
+            heading_target = -135.5f; /* 第一次确认进入 → 预设离开航向 */
         }
     }
     if (!raw_line && has_ever_seen_line)
