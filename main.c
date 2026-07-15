@@ -180,7 +180,7 @@ void task_2(void)
         /* 保存并设置任务二的专属速度 */
         save_trace_spd = trace_base_speed;
         save_gyro_spd = gyro_base_speed;
-        trace_base_speed = 20.0f; /* 任务二循迹速度 */
+        trace_base_speed = 25.0f; /* 任务二循迹速度 */
         gyro_base_speed = 30.0f;  /* 任务二陀螺仪速度 */
 
         led_on();
@@ -191,7 +191,7 @@ void task_2(void)
 
     if (systick_get_tick() - start_tick < 500)
     {
-        heading_target = -38.0f;
+        heading_target = -43.0f;
         return;
     }
 
@@ -261,7 +261,7 @@ void task_2(void)
         has_ever_seen_line = 1; /* 确认进入 */
         if (leave_count == 0)
         {
-            heading_target = -130.0f; /* 第一次确认进入 → 预设离开航向 */
+            heading_target = -131.0f; /* 第一次确认进入 → 预设离开航向 */
         }
     }
     if (!raw_line && has_ever_seen_line)
