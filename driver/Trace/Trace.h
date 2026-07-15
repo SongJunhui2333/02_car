@@ -7,7 +7,7 @@
 #define Trace_Count 8 // 循迹模块路数
 
 /* ========== 循迹PID参数（可调） ========== */
-#define TRACE_KP (0.006f * 0.7f) /* 比例系数 — 越大转向越灵敏 */
+#define TRACE_KP (0.007f * 0.7f) /* 比例系数 — 越大转向越灵敏 */
 #define TRACE_KI (0.05f)         /* 积分系数 — 循迹一般不需要，先保持0 */
 #define TRACE_KD (0.025f * 0.3f) /* 微分系数 — 抑制震荡，让循迹更平滑 */
 #define TRACE_MAX_OUT (70.0f)    /* 输出上限 */

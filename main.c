@@ -361,7 +361,7 @@ void task_3(void)
         buzzer_on();
         ind_tick = systick_get_tick();
         if (enc_count == 1)
-            heading_target = -120.0f;
+            heading_target = -100.0f;
         else if (enc_count == 2)
         {
             heading_target = -30.0f;
