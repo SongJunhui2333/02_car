@@ -306,7 +306,7 @@ void task_3(void)
         save_trace_spd = trace_base_speed;
         save_gyro_spd = gyro_base_speed;
         trace_base_speed = 20.0f; /* 任务三循迹速度 */
-        gyro_base_speed = 18.0f;  /* 任务三陀螺仪速度 */
+        gyro_base_speed = 25.0f;  /* 任务三陀螺仪速度 */
 
         led_on();
         buzzer_on();
@@ -334,7 +334,7 @@ void task_3(void)
             ind_tick = systick_get_tick();
             prev_line = 0;
             has_ever_seen_line = 0;
-            heading_target = 140.5f; /* 设置陀螺仪导航目标航向 */
+            heading_target = 137.0f; /* 设置陀螺仪导航目标航向 */
         }
         else
         {
@@ -346,7 +346,7 @@ void task_3(void)
     /* ====== 阶段1：原任务三流程（不变） ====== */
     if (systick_get_tick() - start_tick < 500)
     {
-        heading_target = 140.5f;
+        heading_target = 137.0f;
         return;
     }
 
@@ -361,11 +361,11 @@ void task_3(void)
         buzzer_on();
         ind_tick = systick_get_tick();
         if (enc_count == 1)
-            heading_target = -140.0f;
+            heading_target = -120.0f;
         else if (enc_count == 2)
         {
-            heading_target = -10.0f;
-            enc2_heading = -20.0f;    /* 保存第2次遇黑线航向 */
+            heading_target = -30.0f;
+            enc2_heading = -30.0f;    /* 保存第2次遇黑线航向 */
             trace_base_speed = 18.0f; /* 第二段循迹速度降低 */
             dist_keep_mode = 0;       /* 关闭跟车距离保持模式 */
         }
@@ -394,9 +394,9 @@ void task_3(void)
     if (dist_keep_mode)
     {
         uint16_t dist = g_car_distance;
-        if (dist > 300)
-            dist = 250;                           /* 超量程时钳位到目标值，防止超声波误读导致急加速 */
-        int16_t dist_error = (int16_t)dist - 250; /* 距离误差，目标200mm */
+        if (dist > 350)
+            dist = 300;                           /* 超量程时钳位到目标值，防止超声波误读导致急加速 */
+        int16_t dist_error = (int16_t)dist - 300; /* 距离误差，目标300mm */
         float speed_adj = dist_error * 0.05f;     /* 比例增益：误差×0.05 */
         gyro_base_speed = 18.0f + speed_adj;
         if (gyro_base_speed < 5.0f)
@@ -421,7 +421,7 @@ void task_3(void)
         has_ever_seen_line = 1; /* 确认进入 */
         if (leave_count == 0)
         {
-            heading_target = 40.0f; /* 第一次确认进入 → 预设离开航向 */
+            heading_target = 39.5f; /* 第一次确认进入 → 预设离开航向 */
         }
     }
     if (!raw_line && has_ever_seen_line)
@@ -761,6 +761,8 @@ int main(void)
 
         motor_set_direction(1, 2);
         motor_set_direction(2, 2);
+
+        // g_line_detected = 1; /* 临时：强制黑线检测为有黑线，便于测试陀螺仪导航 */
 
         // UART_print_string(PRINT_INST, "Hello TI!\n");
         // delay_ms(500);
